@@ -17,6 +17,7 @@ import FilterStatus from "~/components/filter/FilterStatus.astro";
 import FilterProject from "~/components/filter/FilterProject.astro";
 import FilterLegal from "~/components/filter/FilterLegal.astro";
 import FilterSize from "~/components/filter/FilterSize.astro";
+import PollutionScaleTrigger from "~/components/scale/PollutionScaleTrigger.astro";
 import { SlidersHorizontal } from "lucide-astro";
 
 // Takes no props: it read the whole dataset from `clientProjects` even when it
@@ -146,7 +147,8 @@ const lastUpdated = new Date().toLocaleDateString("en-US", {
     <FilterProject largestProjects={largestProjects} />
   </div>
 
-  <div class="shrink-0 px-3.5 py-2 border-t border-hair text-center">
+  <div class="shrink-0 px-3.5 py-2 border-t border-hair flex flex-col gap-1.5 items-center">
+    <PollutionScaleTrigger />
     <span class="text-[10px] text-ink-4">Last updated: {lastUpdated}</span>
   </div>
 

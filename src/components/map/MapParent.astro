@@ -9,6 +9,7 @@ import MapThemeSelector from "~/components/ui/MapThemeSelector.astro";
 import CampaignBanner from "~/components/campaign/CampaignBanner.astro";
 import CleanGridBar from "~/components/grid/CleanGridBar.astro";
 import CleanGridTracker from "~/components/grid/CleanGridTracker.astro";
+import PollutionScaleTracker from "~/components/scale/PollutionScaleTracker.astro";
 import MobileToolbar from "~/components/mobile/MobileToolbar.astro";
 
 // One build-time snapshot for the news rail's first paint. Spread rather than
@@ -80,6 +81,15 @@ const news = await fetchLocalNews();
     layer is positioned by the UA, not by an ancestor.
   -->
   <CleanGridTracker />
+
+  <!--
+    The record behind the pollution-scale trigger in the filters rail — see
+    PollutionScaleTrigger.astro for why the entry point lives there rather
+    than in the top-centre stack. Rendered here for the same reason
+    CleanGridTracker is: a `<dialog>` in the top layer is positioned by the
+    UA, not by an ancestor.
+  -->
+  <PollutionScaleTracker />
 
   <!--
     Phone chrome, and the controller for every panel above it. Rendered last so
