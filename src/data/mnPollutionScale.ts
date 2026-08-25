@@ -267,33 +267,54 @@ export const GHG_ROWS: PollutionRow[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// TOXICS RELEASE INVENTORY (TRI) — NAME IS PROVISIONAL, SEE BELOW
+// CLASS I AREA VISIBILITY SCREENING — NOT TRI. See KNOWN_GAPS for how this
+// was mislabeled in an earlier draft; kept as `TRI_*` names below only to
+// avoid a same-commit rename across files, not because this is TRI data.
 // ---------------------------------------------------------------------------
-// Ranked order only — exact pounds-released figures per facility were not
-// independently verified for a single consistent year (TRI Explorer requires
-// a per-facility TRI ID lookup with no bulk endpoint).
+// attachment_1.pdf has now been read directly and the methodology is
+// confirmed. This is EPA Region 5's regional-haze "Q/D" screening table for
+// the docket "Air Plan Approval; Minnesota; Revision to Taconite Federal
+// Implementation Plan" (EPA-R05-OAR-2024-0216, Clean Air Act §§110/169A) —
+// it has nothing to do with the Toxics Release Inventory. TRI is never
+// mentioned in the document.
 //
-// THE "TRI-DERIVED" LABEL ITSELF IS NOW IN DOUBT, NOT JUST THE SORT ORDER:
-// the source docket, EPA-R05-OAR-2024-0216, is EPA's "Air Plan Approval;
-// Minnesota; Revision to Taconite Federal Implementation Plan" — a Clean Air
-// Act §§110/169A regional-haze/visibility action, not a TRI rulemaking.
-// attachment_1.pdf could not be fetched directly to confirm its contents
-// (regulations.gov returns 403 to automated fetches). The facility mix here
-// (five taconite plants, two coal power plants) reads more like a
-// regional-haze "top SO2/NOx emitting sources" screening list than a TRI
-// pounds-released ranking — those are different pollutants and a different
-// metric. Separately, even a confirmed TRI ranking is raw pounds released,
-// not toxicity-weighted risk (EPA's own RSEI tool can produce a different
-// order). Do not present this list as "top TRI polluters" in any UI copy
-// until someone opens attachment_1.pdf directly and reads its stated
-// methodology — until then this is "facilities named in a Region 5 air
-// docket," full stop. See KNOWN_GAPS.
+// The actual metric, straight from the table headers: for each facility,
+// Q = annual tons of SO2 + NOx + PM10 (2020 levels; NOx + SO2 only, 2023
+// levels, if the facility is a power plant), and D = distance in km to a
+// given federal Class I area (Voyageurs, Boundary Waters Canoe Area, Isle
+// Royale, Badlands, Theodore Roosevelt, Wind Cave, Lostwood, Medicine Lake,
+// Seney, Mingo, Rainbow Lake Wilderness, Hercules-Glades Wilderness — a
+// dozen-plus protected areas across several states). "Cumulative Q/D" sums
+// Q/D across all those Class I areas for one facility. This is the standard
+// EPA/Federal Land Manager screening score for whether a source might
+// contribute to regional haze — it rewards a facility for BOTH high SO2/
+// NOx/PM10 emissions AND proximity to a protected area. It is not a measure
+// of total pollution released, and a facility with larger raw emissions but
+// farther from any Class I area can rank lower than a smaller, closer one.
+// Do not describe this ranking as "top polluters" or "largest emitters" —
+// describe it as what it is: ranked by potential visibility impact on
+// federally protected Class I areas.
+//
+// The document's full table (attachment_1.pdf, read 2026-08-25) lists 16
+// Minnesota facilities before continuing into other states (ND, IN, MO, NE,
+// IL, IA, MI, OH, WI) — Minnesota facilities occupy the top ranks. This
+// module includes only the top 11; ranks 12–16 (also Minnesota, all lower-
+// ranked than #11) are an intentional truncation, not evidence those
+// facilities are less relevant. See KNOWN_GAPS.
+//
+// The two triId values below (Sherco, Flint Hills) do NOT come from this
+// document — attachment_1.pdf's own facility identifier is an "EIS Facility
+// ID" (e.g. Sherco = 6990811, Flint Hills = 6275811), a completely different
+// number in a different EPA system. The triId values were sourced
+// separately, presumably a direct TRI Explorer lookup, and their original
+// sourcing was not re-verified in this pass — flagged in KNOWN_GAPS.
 
 export const TRI_TOP_FACILITIES: {
   rank: number;
   facility: string;
   sector: string;
-  /** TRI Facility ID, where confirmed against EPA's own system — used to
+  /** TRI Facility ID, sourced separately from this list's actual origin
+   * (attachment_1.pdf uses an unrelated "EIS Facility ID" scheme) — used to
    * build a direct release-profile link. Null where not yet looked up. */
   triId: string | null;
 }[] = [
@@ -310,19 +331,20 @@ export const TRI_TOP_FACILITIES: {
   { rank: 11, facility: 'Flint Hills Resources Pine Bend Refinery', sector: 'Petroleum refining', triId: '55164KCHRFPOBOX' },
 ];
 
-/** Direct per-chemical release-profile link once a TRI Facility ID is known. */
+/** Direct per-chemical release-profile link once a TRI Facility ID is known.
+ * Unrelated to TRI_SOURCE below — see the module header note. */
 export function triProfileUrl(triId: string): string {
   return `https://enviro.epa.gov/triexplorer/release_fac_profile?TRI=${triId}`;
 }
 
 export const TRI_SOURCE = {
-  label: 'EPA Region 5 air docket, facility list of unconfirmed methodology',
+  label: 'EPA Region 5 regional-haze Q/D screening table (Taconite Federal Implementation Plan docket) — not TRI',
   documentId: 'EPA-R05-OAR-2024-0216-0045, attachment 1',
   url: 'https://downloads.regulations.gov/EPA-R05-OAR-2024-0216-0045/attachment_1.pdf',
   tier: 2 as Tier,
-  confidence: 'reported' as Confidence,
-  retrievedAt: '2026-08-24',
-  note: 'Rank order only, and even that is provisional: the parent docket (EPA-R05-OAR-2024-0216) is a Clean Air Act regional-haze/Taconite FIP action, not a TRI rulemaking, so the "TRI-derived" characterization is unconfirmed and plausibly wrong — attachment_1.pdf itself has not been read (403 on automated fetch). Exact pounds-released figures per facility were not independently verified either way — pull directly from TRI Explorer (enviro.epa.gov/triexplorer) by facility ID, and open attachment_1.pdf directly, before publishing this as a TRI ranking.',
+  confidence: 'confirmed' as Confidence,
+  retrievedAt: '2026-08-25',
+  note: 'Confirmed by reading attachment_1.pdf directly: this ranks facilities by "Cumulative Q/D," a Clean Air Act regional-haze visibility-impact screening score (SO2+NOx+PM10 emissions weighted by distance to federal Class I areas like Voyageurs and the Boundary Waters) from a Taconite Federal Implementation Plan docket — not a Toxics Release Inventory ranking. Rank order reflects visibility-impact potential, not total pollution released. Exact per-chemical tonnage figures ARE in the source document (Ammonia, CO2, NOx, PM10, PM2.5, SO2 for 2020 and 2023) but have not yet been transcribed into this dataset.',
 };
 
 // ---------------------------------------------------------------------------
@@ -603,8 +625,8 @@ export const KNOWN_GAPS: KnownGap[] = [
     detail: 'Checked MPCA\'s live Minntac project page (retrieved 2026-08-25): it lists only two water permits in Minntac\'s history — a mine-site wastewater permit (2003) and a tailings-basin wastewater permit (2018) — with no mention of a finalized siphon-discharge EIS or a Record of Decision. The page\'s current active item is an unrelated air permit amendment (wet scrubbers to cartridge filters, comment period closed 2026-06-22). No Final EIS or ROD for the siphon/water-inventory-reduction project was found in EPA\'s national EIS database, MPCA\'s site, or news coverage. This is the best available answer, not a confirmed negative — the 7.2 MGD figure should keep being treated as an unfinalized draft projection, not a live permitted number.',
   },
   {
-    summary: 'The TRI top-11 list\'s source docket is a Clean Air Act regional-haze action, not a TRI rulemaking — the "TRI-derived" label is unconfirmed and plausibly wrong',
-    detail: 'Docket EPA-R05-OAR-2024-0216 (the parent of attachment_1.pdf) is EPA\'s "Air Plan Approval; Minnesota; Revision to Taconite Federal Implementation Plan" — a Clean Air Act §§110/169A regional-haze/visibility action targeting taconite facilities, not a Toxics Release Inventory rulemaking. attachment_1.pdf itself could not be fetched directly (403). The facility mix (five taconite plants plus two coal power plants) is consistent with a regional-haze "highest SO2/NOx emitting sources" screening list, which is a different metric than TRI pounds released across all chemicals. Also worth noting generally: even a genuine TRI ranking is raw pounds released, not toxicity-weighted risk — EPA\'s own risk-screening tools (e.g. RSEI) can produce a different order. Until someone opens attachment_1.pdf directly and reads its stated methodology, treat "Minntac is #1" as "Minntac appears first in this document," not as "TRI data shows Minntac releases the most" — and treat the "TRI-derived" characterization itself as unverified.',
+    summary: 'RESOLVED (was flagged as unconfirmed): the "TRI top-11" list is not TRI at all — it\'s a Clean Air Act regional-haze visibility screening ranking',
+    detail: 'attachment_1.pdf was read directly on 2026-08-25. It is EPA Region 5\'s "Cumulative Q/D" table from the Taconite Federal Implementation Plan docket (EPA-R05-OAR-2024-0216) — a regional-haze screening score (SO2+NOx+PM10 emissions weighted by distance to Class I areas like Voyageurs and the Boundary Waters), not a Toxics Release Inventory ranking. TRI is not mentioned anywhere in the source document. The rank order reflects visibility-impact potential, not total pollution released — a facility with larger raw emissions but farther from a Class I area can rank below a smaller, closer one. Data and code labels have been corrected accordingly (previously reported as an open question in this same log — see git history). Remaining follow-up: (1) the document also lists exact per-chemical tonnage (ammonia, CO2, NOx, PM10, PM2.5, SO2, for 2020 and 2023) for each facility, not yet transcribed into this dataset — would let this axis show real numbers instead of rank-order-only; (2) the document\'s full facility list continues to 16 Minnesota sites and then into other states (ND, IN, MO, NE, IL, IA, MI, OH, WI) — only the top 11 Minnesota facilities are included here; (3) the two `triId` values (Sherco, Flint Hills) were sourced independently of this document and have not been re-verified in this pass.',
   },
 ];
 

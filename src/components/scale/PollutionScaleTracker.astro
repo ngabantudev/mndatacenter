@@ -211,8 +211,8 @@ const findingsFor = (rows: PollutionRow[]) =>
     <!-- TRI -->
     <section class="flex flex-col gap-2">
       <div class="flex items-baseline justify-between gap-2">
-        <h3 class="text-[11px] font-bold uppercase tracking-wider text-ink">Named in a federal air docket</h3>
-        <span class="text-[9px] font-semibold uppercase tracking-wide text-ink-4">order &amp; basis unconfirmed</span>
+        <h3 class="text-[11px] font-bold uppercase tracking-wider text-ink">Regional haze visibility-impact ranking</h3>
+        <span class="text-[9px] font-semibold uppercase tracking-wide text-ink-4">rank order only</span>
       </div>
       <ol class="flex flex-col gap-1">
         {
@@ -238,10 +238,11 @@ const findingsFor = (rows: PollutionRow[]) =>
       </ol>
       <p class="text-[10px] text-ink-3 leading-snug">
         <span class="font-semibold text-ink-2">No Minnesota data center appears on this list.</span>{" "}
-        This list was labeled a "TRI" (Toxics Release Inventory) ranking in
-        an earlier draft; that label is unconfirmed and the source docket
-        looks more like a Clean Air Act regional-haze filing than a TRI
-        rulemaking. {TRI_SOURCE.note}
+        This ranks facilities by potential visibility impact on federally
+        protected wilderness and park areas (Voyageurs, the Boundary Waters,
+        and others) — not by total pollution released. A facility with
+        higher raw emissions but farther from a protected area can rank
+        below a smaller, closer one. {TRI_SOURCE.note}
       </p>
     </section>
 
