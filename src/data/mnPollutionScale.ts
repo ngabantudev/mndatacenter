@@ -179,14 +179,24 @@ export const GHG_ROWS: PollutionRow[] = [
     approxValue: 11_000_000,
     approxUnit: 'tons CO2e',
     year: 2019,
-    entityConfidence: 'corroborated',
+    // Facility identity is now nailed down directly in EPA's own system —
+    // GHGRP Facility ID 1001024, "Sherburne County" (Xcel/Northern States
+    // Power), 13999 Industrial Blvd, Becker, MN 55308. That resolves
+    // `entityConfidence` to confirmed. The reported ~11M ton figure is still
+    // NOT independently re-pulled — FLIGHT's facility-detail page renders via
+    // client-side JS and did not return the number to an automated fetch, so
+    // `valueConfidence`/`valueState` stay unchanged until someone opens
+    // https://ghgdata.epa.gov/flight/details/1001024 in a browser and reads
+    // the reported total off the page (or pulls it via the Envirofacts GHG
+    // RESTful data service: https://www.epa.gov/enviro/greenhouse-gas-restful-data-service).
+    entityConfidence: 'confirmed',
     valueConfidence: 'reported',
     tier: 2,
-    pendingSource: 'EPA GHGRP / FLIGHT (ghgdata.epa.gov/flight), by facility ID',
-    primarySourceUrl: 'https://www2.startribune.com/minnesotas-top-100-greenhouse-polluters/600156143/',
-    documentType: 'Secondary reporting, citing EPA GHGRP',
-    documentId: null,
-    retrievedAt: '2026-08-24',
+    pendingSource: 'EPA GHGRP Facility ID 1001024 confirmed — CO2e total still needs a direct read from ghgdata.epa.gov/flight/details/1001024 (JS-rendered; not machine-fetchable) or the Envirofacts GHG RESTful service',
+    primarySourceUrl: 'https://ghgdata.epa.gov/flight/details/1001024',
+    documentType: 'EPA GHGRP facility record',
+    documentId: '1001024',
+    retrievedAt: '2026-08-25',
     plainLanguage: "Minnesota's largest coal-fired power plant, owned by Xcel Energy.",
   },
   {
@@ -200,14 +210,21 @@ export const GHG_ROWS: PollutionRow[] = [
     approxValue: 4_000_000,
     approxUnit: 'tons CO2e',
     year: 2019,
+    // UNRESOLVED: two candidate GHGRP Facility IDs were found for this site —
+    // 1010504 and 1006985 — and they may not be the same facility (1010504
+    // could belong to a smaller, separate Flint Hills unit rather than the
+    // main Pine Bend refinery). Do not treat either as confirmed until
+    // resolved by searching "Flint Hills Resources Pine Bend" directly in
+    // FLIGHT's facility search (ghgdata.epa.gov/flight) rather than trusting
+    // either ID secondhand.
     entityConfidence: 'corroborated',
     valueConfidence: 'reported',
     tier: 2,
-    pendingSource: 'EPA GHGRP / FLIGHT (ghgdata.epa.gov/flight), by facility ID',
+    pendingSource: 'Facility ID ambiguous between 1010504 and 1006985 — resolve via FLIGHT facility search before pulling a CO2e figure',
     primarySourceUrl: 'https://www2.startribune.com/minnesotas-top-100-greenhouse-polluters/600156143/',
     documentType: 'Secondary reporting, citing EPA GHGRP',
     documentId: null,
-    retrievedAt: '2026-08-24',
+    retrievedAt: '2026-08-25',
     plainLanguage: "Minnesota's only oil refinery, owned by Flint Hills Resources.",
   },
   {
@@ -257,19 +274,31 @@ export const GHG_ROWS: PollutionRow[] = [
 // a per-facility TRI ID lookup with no bulk endpoint). The order itself comes
 // from a federal rulemaking docket attachment and is corroborated.
 
-export const TRI_TOP_FACILITIES: { rank: number; facility: string; sector: string }[] = [
-  { rank: 1, facility: 'US Steel Corp – Minntac', sector: 'Taconite mining/processing' },
-  { rank: 2, facility: 'United Taconite LLC – Fairlane Plant', sector: 'Taconite processing' },
-  { rank: 3, facility: 'Xcel Energy – Sherburne County (Sherco)', sector: 'Coal power generation' },
-  { rank: 4, facility: 'Hibbing Taconite Co', sector: 'Taconite processing' },
-  { rank: 5, facility: 'Cleveland-Cliffs Minorca Mine', sector: 'Taconite mining' },
-  { rank: 6, facility: 'Minnesota Power – Boswell Energy Center', sector: 'Coal power generation' },
-  { rank: 7, facility: 'Boise White Paper LLC', sector: 'Pulp/paper' },
-  { rank: 8, facility: 'US Steel Corp – Keetac', sector: 'Taconite processing' },
-  { rank: 9, facility: 'Sappi Cloquet LLC', sector: 'Pulp/paper' },
-  { rank: 10, facility: 'Northshore Mining Co', sector: 'Taconite mining/processing' },
-  { rank: 11, facility: 'Flint Hills Resources Pine Bend Refinery', sector: 'Petroleum refining' },
+export const TRI_TOP_FACILITIES: {
+  rank: number;
+  facility: string;
+  sector: string;
+  /** TRI Facility ID, where confirmed against EPA's own system — used to
+   * build a direct release-profile link. Null where not yet looked up. */
+  triId: string | null;
+}[] = [
+  { rank: 1, facility: 'US Steel Corp – Minntac', sector: 'Taconite mining/processing', triId: null },
+  { rank: 2, facility: 'United Taconite LLC – Fairlane Plant', sector: 'Taconite processing', triId: null },
+  { rank: 3, facility: 'Xcel Energy – Sherburne County (Sherco)', sector: 'Coal power generation', triId: '55308NRTHR13999' },
+  { rank: 4, facility: 'Hibbing Taconite Co', sector: 'Taconite processing', triId: null },
+  { rank: 5, facility: 'Cleveland-Cliffs Minorca Mine', sector: 'Taconite mining', triId: null },
+  { rank: 6, facility: 'Minnesota Power – Boswell Energy Center', sector: 'Coal power generation', triId: null },
+  { rank: 7, facility: 'Boise White Paper LLC', sector: 'Pulp/paper', triId: null },
+  { rank: 8, facility: 'US Steel Corp – Keetac', sector: 'Taconite processing', triId: null },
+  { rank: 9, facility: 'Sappi Cloquet LLC', sector: 'Pulp/paper', triId: null },
+  { rank: 10, facility: 'Northshore Mining Co', sector: 'Taconite mining/processing', triId: null },
+  { rank: 11, facility: 'Flint Hills Resources Pine Bend Refinery', sector: 'Petroleum refining', triId: '55164KCHRFPOBOX' },
 ];
+
+/** Direct per-chemical release-profile link once a TRI Facility ID is known. */
+export function triProfileUrl(triId: string): string {
+  return `https://enviro.epa.gov/triexplorer/release_fac_profile?TRI=${triId}`;
+}
 
 export const TRI_SOURCE = {
   label: 'EPA rulemaking docket, TRI-derived facility ranking',
@@ -302,14 +331,22 @@ export const MW_ROWS: PollutionRow[] = [
     value: null,
     approxValue: 2700,
     approxUnit: 'MW',
-    entityConfidence: 'reported',
+    // Docket number now confirmed: PUC Docket 26-170 (Xcel Energy ↔
+    // Google/Echo Zone, LLC), filed 2026-04-14 — that resolves
+    // `entityConfidence` to confirmed. The MW figure itself is still not
+    // independently verified against the filing text, so `valueConfidence`
+    // stays `reported` until someone reads it off the docket at
+    // mn.gov/puc/edockets. As of this writing the docket was still in public
+    // comment (through 2026-09-08) — check for the Commission's final order,
+    // not just the initial filing, once one issues.
+    entityConfidence: 'confirmed',
     valueConfidence: 'reported',
     tier: 1,
-    pendingSource: 'PUC eDockets (mn.gov/puc/edockets) — the ESA filing itself; approximate docket ~26-170 unconfirmed',
+    pendingSource: 'PUC eDockets, Docket 26-170 — MW figure needs a direct read from the filed ESA petition; comment period runs through 2026-09-08',
     primarySourceUrl: 'https://newsroom.xcelenergy.com/news/xcel-energy-to-power-new-google-data-center-in-minnesota',
     documentType: 'Utility press release / trade press',
-    documentId: null,
-    retrievedAt: '2026-08-24',
+    documentId: '26-170',
+    retrievedAt: '2026-08-25',
     plainLanguage:
       "Google's Xcel-served data center near Pine Island — reported new generation up to ~2,700 MW (1,400 MW wind, 200 MW solar, 300 MW battery, plus additional capacity), mostly clean generation Xcel is building to serve the load. Under an active construction restraining order as of this writing.",
   },
@@ -323,14 +360,20 @@ export const MW_ROWS: PollutionRow[] = [
     value: null,
     approxValue: 700,
     approxUnit: 'MW',
-    entityConfidence: 'reported',
+    // Docket number now confirmed: PUC Docket 26-159 (Minnesota Power ↔
+    // Google/Harmony Group, LLC) — that resolves `entityConfidence` to
+    // confirmed. The MW figure is still not independently verified against
+    // the filing text. As of this writing the docket was still in public
+    // comment (through 2026-08-28) — check for the Commission's final order,
+    // not just the initial filing, once one issues.
+    entityConfidence: 'confirmed',
     valueConfidence: 'reported',
     tier: 1,
-    pendingSource: 'PUC eDockets (mn.gov/puc/edockets) — the ESA filing itself; approximate docket ~26-159 unconfirmed',
+    pendingSource: 'PUC eDockets, Docket 26-159 — MW figure needs a direct read from the filed ESA petition; comment period runs through 2026-08-28',
     primarySourceUrl: 'https://www.tdworld.com/utility-business/news/55362721/minnesota-power-reaches-agreement-to-serve-planned-google-data-center',
     documentType: 'Utility press release / trade press',
-    documentId: null,
-    retrievedAt: '2026-08-24',
+    documentId: '26-159',
+    retrievedAt: '2026-08-25',
     plainLanguage:
       "Google's Minnesota Power-served data center — reported new generation of 700 MW (300 MW wind, 400 MW battery storage).",
   },
@@ -351,14 +394,26 @@ export const WATER_ROWS: PollutionRow[] = [
     value: null,
     approxValue: 7_200_000,
     approxUnit: 'gallons/day',
+    // A separate DNR technical report was found citing a St. Louis River
+    // withdrawal rate of ~4,177 gpm (~6.0M gal/day) during its study period —
+    // in the neighborhood of the 7.2M figure above but not an exact match.
+    // Minntac's water accounting is genuinely split across two different
+    // regulators and permit types: DNR appropriation (intake, tracked in
+    // MPARS) and MPCA discharge (the tailings-basin NPDES/SDS permit,
+    // reissued 2018-11-30) — so a mismatch here may mean the two published
+    // figures describe different things (intake vs. discharge) rather than
+    // one of them being wrong. Do not average or reconcile these two numbers;
+    // report both, with their sources, until MPARS is queried directly for
+    // "Minntac" / "U.S. Steel Corp" and returns the actual permitted
+    // appropriation volume — the real primary-source figure for this axis.
     entityConfidence: 'confirmed',
     valueConfidence: 'reported',
     tier: 1,
-    pendingSource: "DNR MPARS (dnr.state.mn.us/mpars) — this figure is a draft EIS discharge projection, not a live appropriation-permit volume, and is the wrong instrument for this axis until replaced with an MPARS figure",
+    pendingSource: "DNR MPARS (mndnr.gov/mpars), searched for \"Minntac\" / \"U.S. Steel Corp\" under water appropriation permits — this figure is a draft EIS discharge projection, not a live appropriation-permit volume, and a separate DNR technical report's ~4,177 gpm (~6.0M gal/day) St. Louis River withdrawal figure does not exactly match it, which may reflect intake vs. discharge being different instruments rather than either being wrong",
     primarySourceUrl: 'https://www.pca.state.mn.us/sites/default/files/minntac-deis.pdf',
     documentType: 'Draft Environmental Impact Statement',
     documentId: null,
-    retrievedAt: '2026-08-24',
+    retrievedAt: '2026-08-25',
     plainLanguage: "Minnesota's largest taconite operation, on tailings-basin water discharge under environmental review.",
   },
   {
@@ -511,6 +566,14 @@ export const KNOWN_GAPS: KnownGap[] = [
     summary: "MPCA's own statewide GHG inventory report could not be directly re-extracted",
     detail: 'Sector-level statewide GHG shares (transportation and agriculture exceeding electricity generation) are reported via MPR News summarizing the MPCA inventory, not independently re-verified against the primary document text.',
   },
+  {
+    summary: "Pine Bend Refinery's EPA GHGRP Facility ID is unresolved between two candidates",
+    detail: '1010504 and 1006985 both surfaced as possible IDs; 1010504 may belong to a smaller, separate Flint Hills unit rather than the main refinery. Needs a two-second confirmation by searching "Flint Hills Resources Pine Bend" directly in FLIGHT (ghgdata.epa.gov/flight) before either can anchor a CO2e figure.',
+  },
+  {
+    summary: "Minntac's water figures come from two sources that don't quite agree",
+    detail: 'A draft EIS cites ~7.2M gal/day discharge; a separate DNR technical report cites ~4,177 gpm (~6.0M gal/day) St. Louis River withdrawal. These may be measuring different things — DNR appropriation (intake) vs. MPCA discharge are two different permits — rather than one figure being wrong. The real primary-source number is the permitted volume in DNR MPARS, not yet pulled.',
+  },
 ];
 
 /**
@@ -521,4 +584,4 @@ export const KNOWN_GAPS: KnownGap[] = [
  * source pulls named in KNOWN_GAPS and in each row's `pendingSource`, and
  * update `retrievedAt` on whatever changes.
  */
-export const LAST_REVIEWED = '2026-08-24';
+export const LAST_REVIEWED = '2026-08-25';
