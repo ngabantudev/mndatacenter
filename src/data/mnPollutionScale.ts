@@ -273,6 +273,16 @@ export const GHG_ROWS: PollutionRow[] = [
 // independently verified for a single consistent year (TRI Explorer requires
 // a per-facility TRI ID lookup with no bulk endpoint). The order itself comes
 // from a federal rulemaking docket attachment and is corroborated.
+//
+// ONE MORE THING NOT YET CONFIRMED: this document lists these 11 facilities
+// in this order, but nobody has yet independently verified that the order
+// reflects TRI release volume specifically, as opposed to some other
+// criterion the rulemaking used (e.g. facility size, alphabetical within a
+// category, or the rule's own applicability threshold). Treat "Minntac is
+// #1" as "Minntac appears first in this document's list," not yet as "TRI
+// data shows Minntac releases the most" — those are different claims until
+// someone opens attachment_1.pdf (or better, pulls a real ranked export from
+// TRI Explorer / EPA ECHO) and confirms the sort criterion.
 
 export const TRI_TOP_FACILITIES: {
   rank: number;
@@ -394,22 +404,31 @@ export const WATER_ROWS: PollutionRow[] = [
     value: null,
     approxValue: 7_200_000,
     approxUnit: 'gallons/day',
+    // CONFIRMED QUOTE, traced directly to the document: the Minntac Draft
+    // EIS (MPCA/DNR joint document) states the proposed tailings-basin
+    // siphon discharge would be "about 5,000 gallons per minute (11.1 cfs
+    // or 7.2 million gallons per day (MGD))." So the 7.2M figure itself is
+    // now solidly sourced to its document — what's still unresolved is
+    // whether that document's *number* is the right one for this axis:
+    //   1. It is a DISCHARGE volume (water leaving the tailings basin), not
+    //      necessarily the INTAKE/appropriation volume DNR permits track —
+    //      those can differ, and this axis is about appropriation.
+    //   2. "Draft EIS" means this was a proposal under review, not
+    //      necessarily a finalized number — unconfirmed whether this draft
+    //      was ever finalized, and if so what the final version or the
+    //      actual MPARS-recorded permit shows.
     // A separate DNR technical report was found citing a St. Louis River
     // withdrawal rate of ~4,177 gpm (~6.0M gal/day) during its study period —
-    // in the neighborhood of the 7.2M figure above but not an exact match.
-    // Minntac's water accounting is genuinely split across two different
-    // regulators and permit types: DNR appropriation (intake, tracked in
-    // MPARS) and MPCA discharge (the tailings-basin NPDES/SDS permit,
-    // reissued 2018-11-30) — so a mismatch here may mean the two published
-    // figures describe different things (intake vs. discharge) rather than
-    // one of them being wrong. Do not average or reconcile these two numbers;
-    // report both, with their sources, until MPARS is queried directly for
-    // "Minntac" / "U.S. Steel Corp" and returns the actual permitted
-    // appropriation volume — the real primary-source figure for this axis.
+    // in the neighborhood of the 7.2M figure but not an exact match, plausibly
+    // because it's measuring intake rather than discharge. Do not average or
+    // reconcile these two numbers; report both, with their sources, until
+    // MPARS is queried directly for "Minntac" / "U.S. Steel Corp" and returns
+    // the actual permitted appropriation volume — the real primary-source
+    // figure for this axis.
     entityConfidence: 'confirmed',
     valueConfidence: 'reported',
     tier: 1,
-    pendingSource: "DNR MPARS (mndnr.gov/mpars), searched for \"Minntac\" / \"U.S. Steel Corp\" under water appropriation permits — this figure is a draft EIS discharge projection, not a live appropriation-permit volume, and a separate DNR technical report's ~4,177 gpm (~6.0M gal/day) St. Louis River withdrawal figure does not exactly match it, which may reflect intake vs. discharge being different instruments rather than either being wrong",
+    pendingSource: "DNR MPARS (mndnr.gov/mpars), searched for \"Minntac\" / \"U.S. Steel Corp\" under water appropriation permits — the 7.2 MGD quote is a confirmed discharge figure from a draft (possibly unfinalized) EIS, not a live DNR appropriation-permit volume, and a separate DNR technical report's ~4,177 gpm (~6.0M gal/day) St. Louis River withdrawal figure does not exactly match it, plausibly because one measures intake and the other discharge",
     primarySourceUrl: 'https://www.pca.state.mn.us/sites/default/files/minntac-deis.pdf',
     documentType: 'Draft Environmental Impact Statement',
     documentId: null,
@@ -573,6 +592,14 @@ export const KNOWN_GAPS: KnownGap[] = [
   {
     summary: "Minntac's water figures come from two sources that don't quite agree",
     detail: 'A draft EIS cites ~7.2M gal/day discharge; a separate DNR technical report cites ~4,177 gpm (~6.0M gal/day) St. Louis River withdrawal. These may be measuring different things — DNR appropriation (intake) vs. MPCA discharge are two different permits — rather than one figure being wrong. The real primary-source number is the permitted volume in DNR MPARS, not yet pulled.',
+  },
+  {
+    summary: 'Unconfirmed whether the Minntac Draft EIS was ever finalized',
+    detail: 'The 7.2 MGD figure is quoted correctly from the draft document, but "draft" means it described a proposal under review, not necessarily an approved final number. Whether a final EIS issued, and what figure it carries if so, has not been checked.',
+  },
+  {
+    summary: "The TRI top-11 list's sort criterion is not confirmed",
+    detail: 'The source document lists these facilities in this order, but nobody has verified the order reflects TRI release volume specifically, rather than some other criterion the rulemaking used. "Appears first in the document" and "highest TRI releases" are different claims until the sort criterion is checked.',
   },
 ];
 
