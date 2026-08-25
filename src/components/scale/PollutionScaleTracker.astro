@@ -212,7 +212,7 @@ const findingsFor = (rows: PollutionRow[]) =>
     <section class="flex flex-col gap-2">
       <div class="flex items-baseline justify-between gap-2">
         <h3 class="text-[11px] font-bold uppercase tracking-wider text-ink">Regional haze visibility-impact ranking</h3>
-        <span class="text-[9px] font-semibold uppercase tracking-wide text-ink-4">rank order only</span>
+        <span class="text-[9px] font-semibold uppercase tracking-wide text-ink-4">rank by visibility impact, not tonnage</span>
       </div>
       <ol class="flex flex-col gap-1">
         {
@@ -221,6 +221,9 @@ const findingsFor = (rows: PollutionRow[]) =>
               <span class="tabular-nums font-bold text-ink-4 w-4 shrink-0">{f.rank}</span>
               <span class="font-medium text-ink">{f.facility}</span>
               <span class="text-ink-4">— {f.sector}</span>
+              <span class="text-ink-4 tabular-nums">
+                ({numberFmt.format(f.tonnage2020.co2)} tons CO2, {numberFmt.format(f.tonnage2020.so2)} tons SO2, 2020)
+              </span>
               {f.triId && (
                 <a
                   href={triProfileUrl(f.triId)}

@@ -31,11 +31,11 @@
 // 1. TWO CONFIDENCE FIELDS, NOT ONE. `entityConfidence` is whether a facility
 //    genuinely belongs on this list; `valueConfidence` is whether its number
 //    is independently verified. Sherco belongs on the GHG list on a Tier 2
-//    corroborated basis (an EPA rulemaking docket's TRI-derived ranking) but
-//    its ~11M ton figure is only `reported` (Star Tribune, citing GHGRP data
-//    this project could not independently re-pull). Splitting the two is what
-//    lets the panel name Sherco, in rank order, without asserting the
-//    tonnage as fact.
+//    corroborated basis (Star Tribune reporting, citing EPA GHGRP) but its
+//    ~11M ton figure is only `reported` (that same secondary source, citing
+//    GHGRP data this project could not independently re-pull). Splitting the
+//    two is what lets the panel name Sherco, in rank order, without
+//    asserting the tonnage as fact.
 //
 // 2. NO DERIVED FIGURES. In particular: never multiply a data center's MW by
 //    Minnesota's grid carbon intensity to manufacture a CO2e/yr estimate. No
@@ -297,38 +297,77 @@ export const GHG_ROWS: PollutionRow[] = [
 //
 // The document's full table (attachment_1.pdf, read 2026-08-25) lists 16
 // Minnesota facilities before continuing into other states (ND, IN, MO, NE,
-// IL, IA, MI, OH, WI) — Minnesota facilities occupy the top ranks. This
-// module includes only the top 11; ranks 12–16 (also Minnesota, all lower-
-// ranked than #11) are an intentional truncation, not evidence those
-// facilities are less relevant. See KNOWN_GAPS.
+// IL, IA, MI, OH, WI) — Minnesota facilities occupy the top ranks. Per the
+// project's out-of-state scope decision, this module includes all 16
+// Minnesota facilities and stops there — the out-of-state facilities that
+// follow in the same document are not shown here, since nothing in the
+// document establishes that they directly affect Minnesota (they're ranked
+// by their own proximity to Class I areas, which for the entries after #16
+// are not Minnesota's).
 //
 // The two triId values below (Sherco, Flint Hills) do NOT come from this
 // document — attachment_1.pdf's own facility identifier is an "EIS Facility
 // ID" (e.g. Sherco = 6990811, Flint Hills = 6275811), a completely different
-// number in a different EPA system. The triId values were sourced
-// separately, presumably a direct TRI Explorer lookup, and their original
-// sourcing was not re-verified in this pass — flagged in KNOWN_GAPS.
+// number in a different EPA system. Independently re-verified 2026-08-25 via
+// EPA's Envirofacts REST API (data.epa.gov/efservice/TRI_FACILITY/...) —
+// not the interactive TRI Explorer UI, which blocks automated fetches — and
+// both resolved to the expected facility name and city (Xcel Energy
+// Sherburne County Generating Plant / Becker, MN; Flint Hills Resources
+// Pine Bend LLC / Rosemount, MN). Confidence upgraded accordingly.
+//
+// TONNAGE FIGURES: `tonnage2020` is dense and complete for all 16 rows,
+// transcribed from attachment_1.pdf's "2020 Levels" columns (Ammonia, CO2,
+// NOx, PM10, PM2.5, SO2). Cross-checked against a second, overlapping table
+// later in the same document that repeats most of these facilities in a
+// different row order — every value that appears in both places matches,
+// which is the actual basis for the "confident" label here (an earlier pass
+// at this transcription had a one-row alignment error for ranks 7–13 that
+// this cross-check caught and fixed).
+//
+// `tonnage2023PowerPlant` is populated for the three facilities confirmed as
+// power plants with sparse-but-unambiguous 2023 columns: Sherco, Boswell,
+// and Xcel Allen S King (the last confirmed via the same cross-check table).
+// Minnesota Power's Hibbard Renewable Energy Center (rank 16) is also
+// classed as a combustion source in the document but no 2023 CO2/NOx/SO2
+// figure for it could be found in either table pass — left null rather than
+// guessed. See KNOWN_GAPS.
 
 export const TRI_TOP_FACILITIES: {
   rank: number;
   facility: string;
+  county: string;
   sector: string;
   /** TRI Facility ID, sourced separately from this list's actual origin
-   * (attachment_1.pdf uses an unrelated "EIS Facility ID" scheme) — used to
-   * build a direct release-profile link. Null where not yet looked up. */
+   * (attachment_1.pdf uses an unrelated "EIS Facility ID" scheme) —
+   * independently re-verified via EPA Envirofacts REST API, 2026-08-25.
+   * Used to build a direct release-profile link. Null where not looked up. */
   triId: string | null;
+  /** Cumulative Q/D: the regional-haze visibility-impact screening score
+   * this list is actually ranked by. Not a pollution-volume figure. */
+  cumulativeQD: number;
+  /** 2020-level annual tons, straight from attachment_1.pdf. */
+  tonnage2020: { ammonia: number | null; co2: number; nox: number; pm10: number; pm25: number; so2: number };
+  /** 2023-level annual tons (CO2, NOx, SO2) — populated only for power
+   * plants where the source document's sparse columns could be confidently
+   * row-matched. Null does not mean zero; see module note above. */
+  tonnage2023PowerPlant: { co2: number; nox: number; so2: number } | null;
 }[] = [
-  { rank: 1, facility: 'US Steel Corp – Minntac', sector: 'Taconite mining/processing', triId: null },
-  { rank: 2, facility: 'United Taconite LLC – Fairlane Plant', sector: 'Taconite processing', triId: null },
-  { rank: 3, facility: 'Xcel Energy – Sherburne County (Sherco)', sector: 'Coal power generation', triId: '55308NRTHR13999' },
-  { rank: 4, facility: 'Hibbing Taconite Co', sector: 'Taconite processing', triId: null },
-  { rank: 5, facility: 'Cleveland-Cliffs Minorca Mine', sector: 'Taconite mining', triId: null },
-  { rank: 6, facility: 'Minnesota Power – Boswell Energy Center', sector: 'Coal power generation', triId: null },
-  { rank: 7, facility: 'Boise White Paper LLC', sector: 'Pulp/paper', triId: null },
-  { rank: 8, facility: 'US Steel Corp – Keetac', sector: 'Taconite processing', triId: null },
-  { rank: 9, facility: 'Sappi Cloquet LLC', sector: 'Pulp/paper', triId: null },
-  { rank: 10, facility: 'Northshore Mining Co', sector: 'Taconite mining/processing', triId: null },
-  { rank: 11, facility: 'Flint Hills Resources Pine Bend Refinery', sector: 'Petroleum refining', triId: '55164KCHRFPOBOX' },
+  { rank: 1, facility: 'US Steel Corp – Minntac', county: 'St. Louis', sector: 'Taconite mining/processing', triId: null, cumulativeQD: 500.71, tonnage2020: { ammonia: 10.24, co2: 1_334_797.81, nox: 5_963.10, pm10: 2_530.62, pm25: 1_889.63, so2: 904.22 }, tonnage2023PowerPlant: null },
+  { rank: 2, facility: 'United Taconite LLC – Fairlane Plant', county: 'St. Louis', sector: 'Taconite processing', triId: null, cumulativeQD: 244.66, tonnage2020: { ammonia: 0.04, co2: 548_411.44, nox: 4_346.26, pm10: 742.66, pm25: 407.98, so2: 442.16 }, tonnage2023PowerPlant: null },
+  { rank: 3, facility: 'Xcel Energy – Sherburne County (Sherco)', county: 'Sherburne', sector: 'Coal power generation', triId: '55308NRTHR13999', cumulativeQD: 173.99, tonnage2020: { ammonia: 6.55, co2: 10_148_940.09, nox: 6_033.59, pm10: 646.45, pm25: 316.19, so2: 3_984.71 }, tonnage2023PowerPlant: { co2: 7_859_548.08, nox: 4_861.32, so2: 2_635.88 } },
+  { rank: 4, facility: 'Hibbing Taconite Co', county: 'St. Louis', sector: 'Taconite processing', triId: null, cumulativeQD: 127.61, tonnage2020: { ammonia: 0.66, co2: 265_856.04, nox: 1_594.35, pm10: 1_342.95, pm25: 335.57, so2: 533.53 }, tonnage2023PowerPlant: null },
+  { rank: 5, facility: 'Cleveland-Cliffs Minorca Mine', county: 'St. Louis', sector: 'Taconite mining', triId: null, cumulativeQD: 89.57, tonnage2020: { ammonia: 0.29, co2: 263_179.19, nox: 1_151.11, pm10: 584.93, pm25: 169.15, so2: 169.25 }, tonnage2023PowerPlant: null },
+  { rank: 6, facility: 'Minnesota Power – Boswell Energy Center', county: 'Itasca', sector: 'Coal power generation', triId: null, cumulativeQD: 74.20, tonnage2020: { ammonia: 1.02, co2: 5_023_466.09, nox: 2_039.03, pm10: 428.72, pm25: 227.44, so2: 491.00 }, tonnage2023PowerPlant: { co2: 5_682_618.35, nox: 2_335.31, so2: 578.62 } },
+  { rank: 7, facility: 'Boise White Paper LLC', county: 'Koochiching', sector: 'Pulp/paper', triId: null, cumulativeQD: 72.91, tonnage2020: { ammonia: 36.11, co2: 1_050_992.29, nox: 798.28, pm10: 105.91, pm25: 105.86, so2: 15.95 }, tonnage2023PowerPlant: null },
+  { rank: 8, facility: 'US Steel Corp – Keetac', county: 'St. Louis', sector: 'Taconite processing', triId: null, cumulativeQD: 61.40, tonnage2020: { ammonia: null, co2: 100_672.46, nox: 1_388.00, pm10: 291.76, pm25: 195.56, so2: 247.50 }, tonnage2023PowerPlant: null },
+  { rank: 9, facility: 'Sappi Cloquet LLC', county: 'Carlton', sector: 'Pulp/paper', triId: null, cumulativeQD: 55.97, tonnage2020: { ammonia: 24.46, co2: 1_451_816.23, nox: 1_290.51, pm10: 187.97, pm25: 76.86, so2: 493.82 }, tonnage2023PowerPlant: null },
+  { rank: 10, facility: 'Northshore Mining Co', county: 'Lake', sector: 'Taconite mining/processing', triId: null, cumulativeQD: 44.74, tonnage2020: { ammonia: 0.82, co2: 182_204.37, nox: 639.20, pm10: 302.58, pm25: 204.31, so2: 106.86 }, tonnage2023PowerPlant: null },
+  { rank: 11, facility: 'Flint Hills Resources Pine Bend Refinery', county: 'Dakota', sector: 'Petroleum refining', triId: '55164KCHRFPOBOX', cumulativeQD: 13.75, tonnage2020: { ammonia: 40.17, co2: 4_369_021.55, nox: 1_031.39, pm10: 259.71, pm25: 212.28, so2: 594.71 }, tonnage2023PowerPlant: null },
+  { rank: 12, facility: 'Northshore Mining Co – Peter Mitchell', county: 'St. Louis', sector: 'Taconite mining', triId: null, cumulativeQD: 11.08, tonnage2020: { ammonia: null, co2: 2_188.50, nox: 2.24, pm10: 275.78, pm25: 170.39, so2: 0.17 }, tonnage2023PowerPlant: null },
+  { rank: 13, facility: 'American Crystal Sugar – East Grand Forks', county: 'Polk', sector: 'Sugar mill', triId: null, cumulativeQD: 11.05, tonnage2020: { ammonia: 75.63, co2: 215_311.75, nox: 613.35, pm10: 181.79, pm25: 158.17, so2: 946.31 }, tonnage2023PowerPlant: null },
+  { rank: 14, facility: 'Southern Minnesota Beet Sugar Coop', county: 'Renville', sector: 'Sugar mill', triId: null, cumulativeQD: 11.01, tonnage2020: { ammonia: 82.44, co2: 474_223.34, nox: 1_046.97, pm10: 142.80, pm25: 95.91, so2: 876.52 }, tonnage2023PowerPlant: null },
+  { rank: 15, facility: 'Xcel Energy – Allen S King Generating Plant', county: 'Washington', sector: 'Coal power generation', triId: null, cumulativeQD: 5.58, tonnage2020: { ammonia: 4.41, co2: 938_952.57, nox: 425.10, pm10: 73.38, pm25: 47.93, so2: 490.54 }, tonnage2023PowerPlant: { co2: 1_090_211.40, nox: 492.61, so2: 557.52 } },
+  { rank: 16, facility: 'Minnesota Power – Hibbard Renewable Energy Center', county: 'St. Louis', sector: 'Electricity generation via combustion', triId: null, cumulativeQD: 5.40, tonnage2020: { ammonia: 53.06, co2: 200_690.80, nox: 299.02, pm10: 24.98, pm25: 19.13, so2: 54.29 }, tonnage2023PowerPlant: null },
 ];
 
 /** Direct per-chemical release-profile link once a TRI Facility ID is known.
@@ -344,7 +383,7 @@ export const TRI_SOURCE = {
   tier: 2 as Tier,
   confidence: 'confirmed' as Confidence,
   retrievedAt: '2026-08-25',
-  note: 'Confirmed by reading attachment_1.pdf directly: this ranks facilities by "Cumulative Q/D," a Clean Air Act regional-haze visibility-impact screening score (SO2+NOx+PM10 emissions weighted by distance to federal Class I areas like Voyageurs and the Boundary Waters) from a Taconite Federal Implementation Plan docket — not a Toxics Release Inventory ranking. Rank order reflects visibility-impact potential, not total pollution released. Exact per-chemical tonnage figures ARE in the source document (Ammonia, CO2, NOx, PM10, PM2.5, SO2 for 2020 and 2023) but have not yet been transcribed into this dataset.',
+  note: 'Confirmed by reading attachment_1.pdf directly: this ranks facilities by "Cumulative Q/D," a Clean Air Act regional-haze visibility-impact screening score (SO2+NOx+PM10 emissions weighted by distance to federal Class I areas like Voyageurs and the Boundary Waters) from a Taconite Federal Implementation Plan docket — not a Toxics Release Inventory ranking. Rank order reflects visibility-impact potential, not total pollution released. Per-chemical tonnage (ammonia, CO2, NOx, PM10, PM2.5, SO2) is now transcribed for all 16 Minnesota facilities in the document — see tonnage2020/tonnage2023PowerPlant on each row.',
 };
 
 // ---------------------------------------------------------------------------
@@ -625,8 +664,8 @@ export const KNOWN_GAPS: KnownGap[] = [
     detail: 'Checked MPCA\'s live Minntac project page (retrieved 2026-08-25): it lists only two water permits in Minntac\'s history — a mine-site wastewater permit (2003) and a tailings-basin wastewater permit (2018) — with no mention of a finalized siphon-discharge EIS or a Record of Decision. The page\'s current active item is an unrelated air permit amendment (wet scrubbers to cartridge filters, comment period closed 2026-06-22). No Final EIS or ROD for the siphon/water-inventory-reduction project was found in EPA\'s national EIS database, MPCA\'s site, or news coverage. This is the best available answer, not a confirmed negative — the 7.2 MGD figure should keep being treated as an unfinalized draft projection, not a live permitted number.',
   },
   {
-    summary: 'RESOLVED (was flagged as unconfirmed): the "TRI top-11" list is not TRI at all — it\'s a Clean Air Act regional-haze visibility screening ranking',
-    detail: 'attachment_1.pdf was read directly on 2026-08-25. It is EPA Region 5\'s "Cumulative Q/D" table from the Taconite Federal Implementation Plan docket (EPA-R05-OAR-2024-0216) — a regional-haze screening score (SO2+NOx+PM10 emissions weighted by distance to Class I areas like Voyageurs and the Boundary Waters), not a Toxics Release Inventory ranking. TRI is not mentioned anywhere in the source document. The rank order reflects visibility-impact potential, not total pollution released — a facility with larger raw emissions but farther from a Class I area can rank below a smaller, closer one. Data and code labels have been corrected accordingly (previously reported as an open question in this same log — see git history). Remaining follow-up: (1) the document also lists exact per-chemical tonnage (ammonia, CO2, NOx, PM10, PM2.5, SO2, for 2020 and 2023) for each facility, not yet transcribed into this dataset — would let this axis show real numbers instead of rank-order-only; (2) the document\'s full facility list continues to 16 Minnesota sites and then into other states (ND, IN, MO, NE, IL, IA, MI, OH, WI) — only the top 11 Minnesota facilities are included here; (3) the two `triId` values (Sherco, Flint Hills) were sourced independently of this document and have not been re-verified in this pass.',
+    summary: 'RESOLVED: the "TRI top-11" list is not TRI at all — it\'s a Clean Air Act regional-haze visibility screening ranking, now fully transcribed to 16 Minnesota facilities with tonnage',
+    detail: 'attachment_1.pdf was read directly on 2026-08-25. It is EPA Region 5\'s "Cumulative Q/D" table from the Taconite Federal Implementation Plan docket (EPA-R05-OAR-2024-0216) — a regional-haze screening score (SO2+NOx+PM10 emissions weighted by distance to Class I areas like Voyageurs and the Boundary Waters), not a Toxics Release Inventory ranking. TRI is not mentioned anywhere in the source document. The rank order reflects visibility-impact potential, not total pollution released — a facility with larger raw emissions but farther from a Class I area can rank below a smaller, closer one. All three follow-ups from the prior version of this gap are now closed: (1) per-chemical tonnage (ammonia, CO2, NOx, PM10, PM2.5, SO2) is transcribed for all 16 Minnesota facilities in the document, cross-checked against a second overlapping table later in the same PDF that repeats most of these facilities in a different order — the cross-check caught and fixed a one-row transcription misalignment for ranks 7–13 in an earlier pass of this same edit; (2) the dataset now includes all 16 Minnesota facilities from the document (previously 11) — out-of-state facilities that follow ranks 1–16 in the same document are deliberately excluded, since nothing in the document establishes they directly affect Minnesota; (3) both `triId` values (Sherco, Flint Hills) were independently re-verified 2026-08-25 via EPA\'s Envirofacts REST API (a non-interactive endpoint, distinct from the TRI Explorer front end that blocks automated fetches) and both resolved to the expected facility name and city. Remaining open item: rank 15 (Xcel Allen S King) has confirmed 2023 CO2/NOx/SO2 figures from the cross-check table, but rank 16 (MN Power Hibbard, also a combustion source) does not — its `tonnage2023PowerPlant` is left null rather than guessed.',
   },
 ];
 
