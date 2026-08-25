@@ -267,22 +267,27 @@ export const GHG_ROWS: PollutionRow[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// TOXICS RELEASE INVENTORY (TRI)
+// TOXICS RELEASE INVENTORY (TRI) — NAME IS PROVISIONAL, SEE BELOW
 // ---------------------------------------------------------------------------
 // Ranked order only — exact pounds-released figures per facility were not
 // independently verified for a single consistent year (TRI Explorer requires
-// a per-facility TRI ID lookup with no bulk endpoint). The order itself comes
-// from a federal rulemaking docket attachment and is corroborated.
+// a per-facility TRI ID lookup with no bulk endpoint).
 //
-// ONE MORE THING NOT YET CONFIRMED: this document lists these 11 facilities
-// in this order, but nobody has yet independently verified that the order
-// reflects TRI release volume specifically, as opposed to some other
-// criterion the rulemaking used (e.g. facility size, alphabetical within a
-// category, or the rule's own applicability threshold). Treat "Minntac is
-// #1" as "Minntac appears first in this document's list," not yet as "TRI
-// data shows Minntac releases the most" — those are different claims until
-// someone opens attachment_1.pdf (or better, pulls a real ranked export from
-// TRI Explorer / EPA ECHO) and confirms the sort criterion.
+// THE "TRI-DERIVED" LABEL ITSELF IS NOW IN DOUBT, NOT JUST THE SORT ORDER:
+// the source docket, EPA-R05-OAR-2024-0216, is EPA's "Air Plan Approval;
+// Minnesota; Revision to Taconite Federal Implementation Plan" — a Clean Air
+// Act §§110/169A regional-haze/visibility action, not a TRI rulemaking.
+// attachment_1.pdf could not be fetched directly to confirm its contents
+// (regulations.gov returns 403 to automated fetches). The facility mix here
+// (five taconite plants, two coal power plants) reads more like a
+// regional-haze "top SO2/NOx emitting sources" screening list than a TRI
+// pounds-released ranking — those are different pollutants and a different
+// metric. Separately, even a confirmed TRI ranking is raw pounds released,
+// not toxicity-weighted risk (EPA's own RSEI tool can produce a different
+// order). Do not present this list as "top TRI polluters" in any UI copy
+// until someone opens attachment_1.pdf directly and reads its stated
+// methodology — until then this is "facilities named in a Region 5 air
+// docket," full stop. See KNOWN_GAPS.
 
 export const TRI_TOP_FACILITIES: {
   rank: number;
@@ -311,13 +316,13 @@ export function triProfileUrl(triId: string): string {
 }
 
 export const TRI_SOURCE = {
-  label: 'EPA rulemaking docket, TRI-derived facility ranking',
+  label: 'EPA Region 5 air docket, facility list of unconfirmed methodology',
   documentId: 'EPA-R05-OAR-2024-0216-0045, attachment 1',
   url: 'https://downloads.regulations.gov/EPA-R05-OAR-2024-0216-0045/attachment_1.pdf',
   tier: 2 as Tier,
-  confidence: 'corroborated' as Confidence,
+  confidence: 'reported' as Confidence,
   retrievedAt: '2026-08-24',
-  note: 'Rank order only. Exact pounds-released figures per facility were not independently verified — pull directly from TRI Explorer (enviro.epa.gov/triexplorer) by facility ID before publishing a numeric value.',
+  note: 'Rank order only, and even that is provisional: the parent docket (EPA-R05-OAR-2024-0216) is a Clean Air Act regional-haze/Taconite FIP action, not a TRI rulemaking, so the "TRI-derived" characterization is unconfirmed and plausibly wrong — attachment_1.pdf itself has not been read (403 on automated fetch). Exact pounds-released figures per facility were not independently verified either way — pull directly from TRI Explorer (enviro.epa.gov/triexplorer) by facility ID, and open attachment_1.pdf directly, before publishing this as a TRI ranking.',
 };
 
 // ---------------------------------------------------------------------------
@@ -594,12 +599,12 @@ export const KNOWN_GAPS: KnownGap[] = [
     detail: 'A draft EIS cites ~7.2M gal/day discharge; a separate DNR technical report cites ~4,177 gpm (~6.0M gal/day) St. Louis River withdrawal. These may be measuring different things — DNR appropriation (intake) vs. MPCA discharge are two different permits — rather than one figure being wrong. The real primary-source number is the permitted volume in DNR MPARS, not yet pulled.',
   },
   {
-    summary: 'Unconfirmed whether the Minntac Draft EIS was ever finalized',
-    detail: 'The 7.2 MGD figure is quoted correctly from the draft document, but "draft" means it described a proposal under review, not necessarily an approved final number. Whether a final EIS issued, and what figure it carries if so, has not been checked.',
+    summary: 'No evidence found that the Minntac Draft EIS was ever finalized — likely stalled',
+    detail: 'Checked MPCA\'s live Minntac project page (retrieved 2026-08-25): it lists only two water permits in Minntac\'s history — a mine-site wastewater permit (2003) and a tailings-basin wastewater permit (2018) — with no mention of a finalized siphon-discharge EIS or a Record of Decision. The page\'s current active item is an unrelated air permit amendment (wet scrubbers to cartridge filters, comment period closed 2026-06-22). No Final EIS or ROD for the siphon/water-inventory-reduction project was found in EPA\'s national EIS database, MPCA\'s site, or news coverage. This is the best available answer, not a confirmed negative — the 7.2 MGD figure should keep being treated as an unfinalized draft projection, not a live permitted number.',
   },
   {
-    summary: "The TRI top-11 list's sort criterion is not confirmed",
-    detail: 'The source document lists these facilities in this order, but nobody has verified the order reflects TRI release volume specifically, rather than some other criterion the rulemaking used. "Appears first in the document" and "highest TRI releases" are different claims until the sort criterion is checked.',
+    summary: 'The TRI top-11 list\'s source docket is a Clean Air Act regional-haze action, not a TRI rulemaking — the "TRI-derived" label is unconfirmed and plausibly wrong',
+    detail: 'Docket EPA-R05-OAR-2024-0216 (the parent of attachment_1.pdf) is EPA\'s "Air Plan Approval; Minnesota; Revision to Taconite Federal Implementation Plan" — a Clean Air Act §§110/169A regional-haze/visibility action targeting taconite facilities, not a Toxics Release Inventory rulemaking. attachment_1.pdf itself could not be fetched directly (403). The facility mix (five taconite plants plus two coal power plants) is consistent with a regional-haze "highest SO2/NOx emitting sources" screening list, which is a different metric than TRI pounds released across all chemicals. Also worth noting generally: even a genuine TRI ranking is raw pounds released, not toxicity-weighted risk — EPA\'s own risk-screening tools (e.g. RSEI) can produce a different order. Until someone opens attachment_1.pdf directly and reads its stated methodology, treat "Minntac is #1" as "Minntac appears first in this document," not as "TRI data shows Minntac releases the most" — and treat the "TRI-derived" characterization itself as unverified.',
   },
 ];
 
