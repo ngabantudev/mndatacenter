@@ -17,8 +17,9 @@
 #
 #   - It never runs `wrangler deploy` or `versions deploy`. It cannot change
 #     what code production is running.
-#   - It writes four fixed keys, all `news:mirror:v1:*`. It does not touch the
-#     `news:v3:*` or `legislation:*` entries the cache owns.
+#   - It writes eight fixed keys (two topics x four windows), all
+#     `news:mirror:v1:*`. It does not touch the `news:v4:*` or `legislation:*`
+#     entries the cache owns.
 #   - Every key it writes carries a TTL (NEWS_MIRROR_TTL_SECONDS, two hours), so
 #     if this workflow is disabled or its credentials are revoked, the mirrors
 #     expire on their own and the route falls back to trying Google live and
@@ -32,8 +33,12 @@
 #   CLOUDFLARE_ACCOUNT_ID
 #
 # KV WRITE BUDGET — read wrangler.jsonc before changing the schedule. The free
-# tier allows 1,000 writes/day. Four windows every 30 minutes is 192, on top of
-# at most ~176 from the routes themselves.
+# tier allows 1,000 writes/day. Two topics x four windows every 30 minutes is
+# 384 (was 192 with one topic), on top of at most ~344 from the routes
+# themselves (was ~176) — see the FRESH_SECONDS table in ~/pages/api/news.ts
+# for how that second number is derived. 384 + 344 is 73% of the free tier;
+# there is no headroom left for a third topic or a tighter schedule without
+# either raising cadence math again or moving off the free tier.
 
 name: Refresh news mirror
 
@@ -107,9 +112,16 @@ jobs:
           #
           # TTL must match NEWS_MIRROR_TTL_SECONDS in ~/lib/newsMirror.ts. It is
           # the whole staleness policy — see that file.
+          #
+          # Filenames are `<topic>-<window>d.json` (scripts/refresh-news.ts),
+          # so the key is derived by stripping the trailing window segment
+          # rather than assuming a fixed field count — keeps this loop correct
+          # if a topic id ever needs a hyphen of its own.
           for file in .news-mirror/*.json; do
-            window="$(basename "$file" .json)"
-            key="news:mirror:v1:${window}"
+            base="$(basename "$file" .json)"
+            window="${base##*-}"
+            topic="${base%-"$window"}"
+            key="news:mirror:v1:${topic}:${window}"
             echo "→ $key ($(wc -c < "$file" | tr -d ' ') bytes)"
             npx wrangler kv key put "$key" \
               --binding LEGISLATION_CACHE \
@@ -137,12 +149,18 @@ jobs:
           # Checks the canonical host, not workers.dev: this is the URL people
           # actually visit, and it is the one whose zone cache makes s-maxage
           # mean anything.
-          source="$(curl -sS -D- -o /dev/null \
-            "https://mndatacenter.org/api/news?days=7&cb=${GITHUB_RUN_ID}" \
-            | grep -i '^x-news-source' | tr -d '\r' | awk '{print $2}')"
-          echo "X-News-Source: ${source:-<none>}"
-          case "$source" in
-            mirror|live) echo "Route is serving real headlines." ;;
-            stale)       echo "::warning::Route served a stale copy; the mirror may not have been picked up yet." ;;
-            *)           echo "::warning::Route reported '${source:-<none>}' — check the mirror upload above." ;;
-          esac
+          #
+          # One window checked per topic, not all eight — this is a smoke test
+          # that the pipeline reached KV at all, not a re-verification of every
+          # window the upload step already confirmed by exit code.
+          for topic in datacenter surveillance; do
+            source="$(curl -sS -D- -o /dev/null \
+              "https://mndatacenter.org/api/news?days=7&topic=${topic}&cb=${GITHUB_RUN_ID}" \
+              | grep -i '^x-news-source' | tr -d '\r' | awk '{print $2}')"
+            echo "[$topic] X-News-Source: ${source:-<none>}"
+            case "$source" in
+              mirror|live) echo "[$topic] Route is serving real headlines." ;;
+              stale)       echo "::warning::[$topic] Route served a stale copy; the mirror may not have been picked up yet." ;;
+              *)           echo "::warning::[$topic] Route reported '${source:-<none>}' — check the mirror upload above." ;;
+            esac
+          done

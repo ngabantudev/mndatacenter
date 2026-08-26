@@ -1,6 +1,6 @@
 ---
 // src/components/map/MapParent.astro
-import { fetchLocalNews } from "~/lib/newsFeed";
+import { fetchLocalNews, DATACENTER_TOPIC, SURVEILLANCE_TOPIC } from "~/lib/newsFeed";
 import MapFilterParent from "~/components/map/MapFilterParent.astro";
 import NewsFeedParent from "../news/NewsFeedParent.astro";
 import MapDetailParent from "~/components/map/MapDetailParent.astro";
@@ -11,9 +11,16 @@ import CleanGridBar from "~/components/grid/CleanGridBar.astro";
 import CleanGridTracker from "~/components/grid/CleanGridTracker.astro";
 import MobileToolbar from "~/components/mobile/MobileToolbar.astro";
 
-// One build-time snapshot for the news rail's first paint. Spread rather than
-// unpacked, so this call site doesn't re-list the payload's fields by hand.
-const news = await fetchLocalNews();
+// One build-time snapshot per topic for the news rail's first paint — the
+// panel can switch topics on the client the instant someone clicks, rather
+// than the second topic costing a first fetch the moment it's chosen.
+// Parallel because the two are independent Google queries; either failing
+// leaves that topic's own outage state without affecting the other.
+const [datacenterNews, surveillanceNews] = await Promise.all([
+  fetchLocalNews(7, DATACENTER_TOPIC),
+  fetchLocalNews(7, SURVEILLANCE_TOPIC),
+]);
+const news = { datacenter: datacenterNews, surveillance: surveillanceNews };
 ---
 
 <section
@@ -30,7 +37,7 @@ const news = await fetchLocalNews();
        moves that node into a popup over the selected marker. -->
   <MapDetailCta />
 
-  <NewsFeedParent {...news} />
+  <NewsFeedParent news={news} />
 
   <!--
     THE TOP-CENTRE STACK, and why the two surfaces in it share one wrapper.

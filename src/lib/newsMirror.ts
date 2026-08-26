@@ -95,6 +95,15 @@ export interface NewsMirror {
 export const MIRRORED_WINDOWS = [1, 7, 30, 365] as const;
 
 /**
+ * Topics mirrored, matching NEWS_TOPICS in ~/lib/newsFeed.ts. Iterated
+ * alongside MIRRORED_WINDOWS by the refresh script — same reasoning as that
+ * constant: a topic mirrored but never requested wastes KV writes, and one
+ * requested but never mirrored is a silent hole the route has to fall back to
+ * a live (and, for this Worker, refused) fetch to fill.
+ */
+export const MIRRORED_TOPICS = ["datacenter", "surveillance"] as const;
+
+/**
  * How long a mirror survives without being rewritten.
  *
  * Two hours against a half-hourly refresh: enough slack for GitHub's scheduled
@@ -104,10 +113,23 @@ export const MIRRORED_WINDOWS = [1, 7, 30, 365] as const;
  */
 export const NEWS_MIRROR_TTL_SECONDS = 7200;
 
-/** KV key for one window. Versioned like the cache key, for the same reason:
- *  a shape change must not be read back by code expecting the old one. */
-export function newsMirrorKey(windowDays: number): string {
-  return `news:mirror:v1:${windowDays}d`;
+/**
+ * KV key for one topic's one window. Versioned like the cache key, for the
+ * same reason: a shape change must not be read back by code expecting the old
+ * one.
+ *
+ * Inserting `topic` changes every key this format has ever produced, so the
+ * pre-topic mirrors go unread the moment this deploys — but that costs
+ * nothing to recover from by design: NEWS_MIRROR_TTL_SECONDS is two hours and
+ * the route falls straight back to a live fetch (and, failing that, an honest
+ * outage banner) whenever a mirror key it looks for isn't there. The next
+ * scheduled refresh run repopulates the new keys and nothing has to be
+ * migrated or cleaned up by hand. `topic` defaults to the data-center id
+ * purely so a caller that hasn't been updated to pass one yet still resolves
+ * to the topic it always meant.
+ */
+export function newsMirrorKey(windowDays: number, topic: string = "datacenter"): string {
+  return `news:mirror:v1:${topic}:${windowDays}d`;
 }
 
 /**

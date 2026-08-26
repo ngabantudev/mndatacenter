@@ -8,6 +8,16 @@ The subject of this site is **industrial infrastructure and the public decisions
 site it**: facilities, permits, utility agreements, tax certifications, water
 appropriations, and the governmental units that approve them.
 
+The news rail (`src/lib/newsFeed.ts`) additionally tracks **police surveillance
+technology** — Flock Safety and other license-plate readers, facial recognition,
+predictive policing, and related gear — as a second, editorially distinct topic. This is
+a headline feed only: it carries no map layer, no registry entry, no `src/data/` module,
+and none of the source-tiering or person-record rules in Part 1 apply to it, because it
+publishes nothing beyond a headline, publisher name, and date as Google News reported
+them. A surveillance-tech record that becomes a claim about a specific department,
+contract, or camera location is a new feature under Part 1's full rules, not an extension
+of this one.
+
 ---
 
 ## Part 0: Guiding Principles

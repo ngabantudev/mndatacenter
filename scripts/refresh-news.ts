@@ -20,9 +20,10 @@
 
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { fetchNews } from "../src/lib/newsFeed";
+import { fetchNews, NEWS_TOPICS } from "../src/lib/newsFeed";
 import {
   MIRRORED_WINDOWS,
+  MIRRORED_TOPICS,
   newsMirrorKey,
   type NewsMirror,
 } from "../src/lib/newsMirror";
@@ -31,14 +32,16 @@ import {
 const OUT_DIR = ".news-mirror";
 
 /**
- * Windows are fetched one at a time, not in parallel.
+ * Every (topic, window) pair is fetched one at a time, not in parallel.
  *
  * `fetchNews` already fans out internally — a year is two geography queries
- * across four date segments, so eight upstream calls — and firing all four
- * windows at once would put roughly twenty concurrent requests on Google from a
+ * across four date segments, so eight upstream calls — and firing several of
+ * these at once would put dozens of concurrent requests on Google from a
  * single runner IP. That is the shape of traffic that gets an IP blocked, which
- * is the problem this script exists to route around. Sequential costs a couple
- * of minutes of Actions time and nothing else.
+ * is the problem this script exists to route around. Sequential costs a few
+ * minutes of Actions time and nothing else. Topics are the outer loop so a
+ * Google refusal partway through still leaves one topic fully written rather
+ * than every topic half-written.
  */
 async function main(): Promise<void> {
   await mkdir(OUT_DIR, { recursive: true });
@@ -46,40 +49,53 @@ async function main(): Promise<void> {
   let written = 0;
   const failures: string[] = [];
 
-  for (const windowDays of MIRRORED_WINDOWS) {
-    const result = await fetchNews(windowDays);
-
-    if (!result.ok) {
-      // Not fatal on its own — see the exit rule below.
-      failures.push(`${windowDays}d: ${result.reason}`);
-      console.error(`✗ ${windowDays}d — ${result.reason}`);
+  for (const topicId of MIRRORED_TOPICS) {
+    const topic = NEWS_TOPICS[topicId];
+    if (!topic) {
+      // Guards against MIRRORED_TOPICS and NEWS_TOPICS drifting apart —
+      // should never happen since both are meant to list the same set, but a
+      // silently-skipped topic would be a much quieter failure than this.
+      failures.push(`${topicId}: unknown topic`);
+      console.error(`✗ ${topicId} — not found in NEWS_TOPICS`);
       continue;
     }
 
-    // An empty-but-successful fetch is mirrored as the fact it is. Skipping it
-    // would leave the previous mirror in place until its TTL, which would serve
-    // last period's headlines as this one's — the exact confusion the ok/failed
-    // split in newsFeed.ts exists to prevent.
-    const mirror: NewsMirror = {
-      items: result.newsItems,
-      truncated: result.truncated,
-      partial: result.partial,
-      fetchedAt: new Date().toISOString(),
-    };
+    for (const windowDays of MIRRORED_WINDOWS) {
+      const result = await fetchNews(windowDays, topic);
+      const label = `${topicId} ${windowDays}d`;
 
-    const file = join(OUT_DIR, `${windowDays}d.json`);
-    await writeFile(file, JSON.stringify(mirror), "utf8");
-    written += 1;
+      if (!result.ok) {
+        // Not fatal on its own — see the exit rule below.
+        failures.push(`${label}: ${result.reason}`);
+        console.error(`✗ ${label} — ${result.reason}`);
+        continue;
+      }
 
-    const flags = [
-      result.truncated ? "truncated" : null,
-      result.partial ? "partial" : null,
-    ]
-      .filter(Boolean)
-      .join(", ");
-    console.log(
-      `✓ ${windowDays}d — ${result.newsItems.length} items${flags ? ` (${flags})` : ""} -> ${newsMirrorKey(windowDays)}`,
-    );
+      // An empty-but-successful fetch is mirrored as the fact it is. Skipping it
+      // would leave the previous mirror in place until its TTL, which would serve
+      // last period's headlines as this one's — the exact confusion the ok/failed
+      // split in newsFeed.ts exists to prevent.
+      const mirror: NewsMirror = {
+        items: result.newsItems,
+        truncated: result.truncated,
+        partial: result.partial,
+        fetchedAt: new Date().toISOString(),
+      };
+
+      const file = join(OUT_DIR, `${topicId}-${windowDays}d.json`);
+      await writeFile(file, JSON.stringify(mirror), "utf8");
+      written += 1;
+
+      const flags = [
+        result.truncated ? "truncated" : null,
+        result.partial ? "partial" : null,
+      ]
+        .filter(Boolean)
+        .join(", ");
+      console.log(
+        `✓ ${label} — ${result.newsItems.length} items${flags ? ` (${flags})` : ""} -> ${newsMirrorKey(windowDays, topicId)}`,
+      );
+    }
   }
 
   // Exit non-zero only when nothing at all was written. One window failing is

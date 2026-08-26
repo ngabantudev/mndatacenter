@@ -23,7 +23,7 @@ import type { APIRoute } from "astro";
 import { kvNamespace, withCache } from "~/lib/edgeCache";
 import { jsonResponse } from "~/lib/jsonResponse";
 import { withResponseCache } from "~/lib/responseCache";
-import { fetchNews, type NewsItem, type NewsPayload } from "~/lib/newsFeed";
+import { fetchNews, NEWS_TOPICS, DEFAULT_TOPIC, type NewsItem, type NewsPayload } from "~/lib/newsFeed";
 import { newsMirrorKey, parseNewsMirror, type NewsMirror } from "~/lib/newsMirror";
 
 export const prerender = false;
@@ -41,12 +41,12 @@ export const prerender = false;
  * because the caller does the same thing in all of them: fall through to a live
  * fetch and, failing that, say so.
  */
-async function readNewsMirror(windowDays: number): Promise<NewsMirror | null> {
+async function readNewsMirror(windowDays: number, topicId: string): Promise<NewsMirror | null> {
   const store = kvNamespace();
   if (!store) return null;
 
   const raw = await store
-    .get(newsMirrorKey(windowDays), "text")
+    .get(newsMirrorKey(windowDays, topicId), "text")
     .catch(() => null);
   return raw ? parseNewsMirror(raw) : null;
 }
@@ -180,6 +180,13 @@ async function buildNewsResponse(url: URL): Promise<Response> {
   const windowDays = ALLOWED_WINDOWS.includes(requested) ? requested : 7;
   const freshSeconds = FRESH_SECONDS[windowDays] ?? 1800;
 
+  // Falls back to the data-center topic for any unrecognized id — including
+  // no param at all — rather than a 400. Every link and bookmark made before
+  // this topic existed omits the param and must keep working exactly as it
+  // always has.
+  const requestedTopic = url.searchParams.get("topic") ?? "";
+  const topic = NEWS_TOPICS[requestedTopic] ?? DEFAULT_TOPIC;
+
   // Captured from inside the builder so the reader gets the actual reason —
   // a timeout, or Google's status code — instead of one generic sentence that
   // covers up which of the two happened.
@@ -197,7 +204,11 @@ async function buildNewsResponse(url: URL): Promise<Response> {
     // returned an identical 19 and 26 here while the branch's own numbers were
     // 29 and 49, which reads as a change that did nothing rather than a change
     // that hadn't been reached yet.
-    `news:v3:${windowDays}d`,
+    // Version bumped to v4 alongside this: the key now carries the topic, so
+    // an entry cached under the old v3 key (necessarily the data-center
+    // results, since no other topic existed) is never misread as belonging
+    // to a topic it wasn't fetched for.
+    `news:v4:${topic.id}:${windowDays}d`,
     {
       // A window that lost some of its searches is re-attempted sooner, so a
       // thin copy can't hold the slot a complete one should occupy.
@@ -221,7 +232,7 @@ async function buildNewsResponse(url: URL): Promise<Response> {
       // and tells the reader — rather than a dead pipeline quietly serving last
       // week under no banner. And if Google ever starts answering Workers
       // again, deleting the workflow is the only change needed.
-      const mirrored = await readNewsMirror(windowDays);
+      const mirrored = await readNewsMirror(windowDays, topic.id);
       if (mirrored) {
         return {
           items: mirrored.items,
@@ -231,7 +242,7 @@ async function buildNewsResponse(url: URL): Promise<Response> {
         };
       }
 
-      const fetched = await fetchNews(windowDays);
+      const fetched = await fetchNews(windowDays, topic);
       if (fetched.ok) {
         return {
           items: fetched.newsItems,

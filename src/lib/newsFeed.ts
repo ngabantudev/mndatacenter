@@ -183,6 +183,49 @@ export function formatCacheAge(storedAt: string | null, now: number = Date.now()
 const DATA_CENTER_TERMS = ["data center", "data centre", "hyperscale", "server farm"];
 
 /**
+ * Must match at least one of these — establishes it's actually about police
+ * surveillance technology, the second topic this feed tracks alongside data
+ * centers.
+ *
+ * Deliberately broad, at the site's request: beyond license-plate readers
+ * (the Flock Safety trigger case — see the topic registry below), this
+ * reaches facial recognition, predictive policing, and the harder-to-name
+ * gear (cell-site simulators, ShotSpotter/gunshot detection, drones used as
+ * first responders) rather than staying narrow the way DATA_CENTER_TERMS is.
+ *
+ * The cost of that breadth is the same one measured for MINNESOTA_TERMS: a
+ * wider match list competes for the same ~100-item Google cap and can pull in
+ * national tech-industry coverage that never mentions Minnesota policing —
+ * "facial recognition" and "drone" both carry heavy non-MN volume on their
+ * own. The geography half of the query (shared with the data-center topic,
+ * see fetchNews below) is what keeps that in check; there is no equivalent
+ * narrowing on the topic half by design, since the request was for coverage,
+ * not precision.
+ *
+ * "alpr" is included as a bare acronym because Minnesota coverage routinely
+ * uses it un-spelled-out ("MPD's ALPR program"); it is short enough to be a
+ * measured false-positive risk worth watching rather than a solved one.
+ */
+const SURVEILLANCE_TERMS = [
+  "flock safety",
+  "flock camera",
+  "flock cameras",
+  "license plate reader",
+  "license plate readers",
+  "automated license plate",
+  "alpr",
+  "facial recognition",
+  "predictive policing",
+  "cell site simulator",
+  "cell-site simulator",
+  "stingray surveillance",
+  "shotspotter",
+  "gunshot detection",
+  "drone as first responder",
+  "fusion center",
+];
+
+/**
  * Twin Cities metro counties, matched as "<name> county" phrases rather than
  * bare county names — "Dakota" alone pulls in every North and South Dakota
  * story, which is a large share of the country's data center news.
@@ -309,8 +352,24 @@ function isLocalOutlet(source: string): boolean {
  * national its framing, so the Star Tribune explaining a federal rule's effect
  * on Becker still belongs here and still arrives.
  */
-const NATIONAL_SCOPE_PATTERN =
+const DATACENTER_NATIONAL_SCOPE_PATTERN =
   /\b(rural america|across america|nationwide|across the country|the u\.?s\.?|united states|nationally|nation's|federal government|white house|congress|trump|globally|worldwide|every state|other states)\b/;
+
+/**
+ * The surveillance topic's version of the guard above — deliberately
+ * narrower, not the same pattern reused.
+ *
+ * Flock's federal and out-of-state data-sharing is one of the biggest
+ * Minnesota ALPR stories there is, so an outlet-only match naming "federal
+ * government", "congress", "nationwide" or similar would wrongly drop
+ * Minnesota's own coverage of that story — an MN outlet reporting "Local
+ * police plate data was searched nationwide, records show" is Minnesota news
+ * about a national practice, not national news that happens to run in a
+ * Minnesota paper. Kept narrow to what's unambiguously not about a specific
+ * place: wire copy about the technology as a global or blanket-nationwide
+ * phenomenon.
+ */
+const SURVEILLANCE_NATIONAL_SCOPE_PATTERN = /\b(globally|worldwide|every state)\b/;
 
 const OTHER_STATE_PATTERN = new RegExp(
   `\\b(${[
@@ -494,26 +553,43 @@ function buildDateQueries(windowDays: number): string[] {
 }
 
 /**
- * Words carried by so much of this feed that counting them would make any two
- * headlines look alike, plus ordinary English filler. Removing them is what
- * makes the overlap below measure the story rather than the topic.
+ * Ordinary English filler, carried by nearly every headline in any topic.
+ * Split from the topic-specific words below so a second topic doesn't have to
+ * repeat this half — only its own subject's carrier words.
  */
-const DUPLICATE_STOP_WORDS = new Set(
-  ("a an the and or but of in on at to for with from by as is are was were be " +
-    "been that this it its into over under after before more most new news say " +
-    "says said will would can could what when where who why how than then them " +
-    "they their there here about against during up down out off " +
-    "data center centers centre minnesota mn").split(" "),
+const BASE_STOP_WORDS =
+  "a an the and or but of in on at to for with from by as is are was were be " +
+  "been that this it its into over under after before more most new news say " +
+  "says said will would can could what when where who why how than then them " +
+  "they their there here about against during up down out off minnesota mn";
+
+/**
+ * Words carried by so much of the data-center feed that counting them would
+ * make any two headlines look alike. Removing them is what makes the overlap
+ * below measure the story rather than the topic.
+ */
+const DATA_CENTER_STOP_WORDS = new Set(
+  `${BASE_STOP_WORDS} data center centers centre`.split(" "),
 );
 
-function contentWords(title: string): Set<string> {
+/** Same job as DATA_CENTER_STOP_WORDS, for the surveillance topic's own
+ *  carrier words — otherwise "Flock camera" headlines would all look like
+ *  the same story to the overlap check purely for sharing "flock camera". */
+const SURVEILLANCE_STOP_WORDS = new Set(
+  (`${BASE_STOP_WORDS} flock camera cameras surveillance license plate ` +
+    "reader readers alpr police facial recognition predictive policing " +
+    "cell site simulator stingray shotspotter gunshot detection fusion drone"
+  ).split(" "),
+);
+
+function contentWords(title: string, stopWords: Set<string>): Set<string> {
   return new Set(
     title
       .toLowerCase()
       .normalize("NFKD")
       .replace(/[^a-z0-9 ]/g, " ")
       .split(/\s+/)
-      .filter((w) => w.length > 2 && !DUPLICATE_STOP_WORDS.has(w)),
+      .filter((w) => w.length > 2 && !stopWords.has(w)),
   );
 }
 
@@ -582,11 +658,14 @@ const DUPLICATE_WINDOW_DAYS = 7;
  * printing plant sale, where the 7-day and 1-year fetches each carried a
  * different CBS headline for it.
  */
-export function collapseDuplicates(items: NewsItem[]): NewsItem[] {
+export function collapseDuplicates(
+  items: NewsItem[],
+  stopWords: Set<string> = DATA_CENTER_STOP_WORDS,
+): NewsItem[] {
   const kept: { item: NewsItem; words: Set<string>; at: number }[] = [];
 
   for (const item of items) {
-    const words = contentWords(item.title);
+    const words = contentWords(item.title, stopWords);
     const at = new Date(item.published).getTime();
     const twin = kept.find(
       (k) =>
@@ -609,6 +688,70 @@ export function collapseDuplicates(items: NewsItem[]): NewsItem[] {
 }
 
 /**
+ * A subject this feed tracks: what to ask Google for, and how to tell a
+ * result that's actually about it from one that merely shares its geography.
+ *
+ * The geography half of a query (MINNESOTA_TERMS, METRO_COUNTY_TERMS, the
+ * outlet list) is topic-independent and lives outside this record on purpose
+ * — every topic reuses it verbatim rather than each carrying its own copy.
+ * What a topic owns is everything about the *subject*: the query term, the
+ * "is this actually about it" filter, the duplicate-collapse vocabulary, and
+ * which national-scope phrases are safe to treat as off-topic wire copy for
+ * that subject specifically (see SURVEILLANCE_NATIONAL_SCOPE_PATTERN's note).
+ */
+export interface NewsTopic {
+  id: string;
+  /** Shown in the panel header and announced on switch. */
+  label: string;
+  /** The subject half of the Google query — grouped in parens exactly like
+   *  GEOGRAPHY_QUERIES's widened form when it's more than one term, per the
+   *  measured warning on that constant: even regrouping a term changes what
+   *  fits under Google's ~100-item cap, so this is written once here and
+   *  reused rather than rebuilt per call. */
+  queryTerm: string;
+  /** Must match at least one of these for a result to count as this topic,
+   *  checked against the same lowercased title+description haystack the
+   *  geography check uses. */
+  matchTerms: string[];
+  /** Feeds collapseDuplicates so two syndicated copies of one story collapse
+   *  on words specific to *this* subject rather than the other topic's. */
+  stopWords: Set<string>;
+  nationalScopePattern: RegExp;
+}
+
+export const DATACENTER_TOPIC: NewsTopic = {
+  id: "datacenter",
+  label: "Data Center Coverage",
+  // Byte-identical to the query this file has always sent — see the note on
+  // GEOGRAPHY_QUERIES. Widening it, even to `("data center" OR ...)`, is a
+  // separate measured decision this topic has deliberately not made.
+  queryTerm: `"data center"`,
+  matchTerms: DATA_CENTER_TERMS,
+  stopWords: DATA_CENTER_STOP_WORDS,
+  nationalScopePattern: DATACENTER_NATIONAL_SCOPE_PATTERN,
+};
+
+export const SURVEILLANCE_TOPIC: NewsTopic = {
+  id: "surveillance",
+  label: "Surveillance Tech Coverage",
+  queryTerm: `(${SURVEILLANCE_TERMS.map((t) => `"${t}"`).join(" OR ")})`,
+  matchTerms: SURVEILLANCE_TERMS,
+  stopWords: SURVEILLANCE_STOP_WORDS,
+  nationalScopePattern: SURVEILLANCE_NATIONAL_SCOPE_PATTERN,
+};
+
+/** Keyed by id so callers that only have a string (a URL param, a data
+ *  attribute) can resolve a topic without a switch statement. */
+export const NEWS_TOPICS: Record<string, NewsTopic> = {
+  [DATACENTER_TOPIC.id]: DATACENTER_TOPIC,
+  [SURVEILLANCE_TOPIC.id]: SURVEILLANCE_TOPIC,
+};
+
+/** Back-compat default: every existing caller that doesn't yet know about
+ *  topics gets exactly the feed it always got. */
+export const DEFAULT_TOPIC = DATACENTER_TOPIC;
+
+/**
  * One attempt. Separated from `fetchNews` so the retry below is obviously a
  * retry of exactly this, and so the failure reason it returns is the real one
  * rather than a generic message chosen at the call site.
@@ -616,6 +759,7 @@ export function collapseDuplicates(items: NewsItem[]): NewsItem[] {
 async function attemptNews(
   googleNewsUrl: string,
   timeoutMs: number,
+  topic: NewsTopic,
 ): Promise<NewsResult> {
   try {
     // Force an early escape rather than hanging a request on a slow upstream.
@@ -707,18 +851,18 @@ async function attemptNews(
 
     const newsItems = parsed
       .filter((item) => {
-        const hasDataCenter = DATA_CENTER_TERMS.some((t) => item.haystack.includes(t));
+        const matchesTopic = topic.matchTerms.some((t) => item.haystack.includes(t));
         // Geography is satisfied either by a place named in the headline or by
         // the outlet being a Minnesota one. The source is checked separately
         // from the haystack rather than folded into it, so that an outlet name
-        // can never stand in for the data center half of the test.
+        // can never stand in for the topic half of the test.
         const namesPlace = MINNESOTA_TERMS.some((t) => item.haystack.includes(t));
         const hasMinnesota =
           namesPlace ||
           (isLocalOutlet(item.source) &&
             !OTHER_STATE_PATTERN.test(item.haystack) &&
-            !NATIONAL_SCOPE_PATTERN.test(item.haystack));
-        return hasDataCenter && hasMinnesota;
+            !topic.nationalScopePattern.test(item.haystack));
+        return matchesTopic && hasMinnesota;
       })
       .sort(byPublishedDesc)
       .map(({ haystack, ...item }) => item);
@@ -776,12 +920,12 @@ async function attemptNews(
  * out of what's left. A dropped connection fails in milliseconds and leaves
  * nearly all of it, which is exactly the case the retry was written for.
  */
-async function fetchOneQuery(rawQuery: string): Promise<NewsResult> {
+async function fetchOneQuery(rawQuery: string, topic: NewsTopic): Promise<NewsResult> {
   const query = encodeURIComponent(rawQuery);
   const googleNewsUrl = `https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
 
   const startedAt = Date.now();
-  const first = await attemptNews(googleNewsUrl, QUERY_BUDGET_MS);
+  const first = await attemptNews(googleNewsUrl, QUERY_BUDGET_MS, topic);
   if (first.ok || !first.retryable) return first;
 
   const remaining = QUERY_BUDGET_MS - (Date.now() - startedAt);
@@ -789,15 +933,18 @@ async function fetchOneQuery(rawQuery: string): Promise<NewsResult> {
 
   // Whatever the second attempt says stands: on success it's the data, and on
   // failure it's the more recent truth about why.
-  return attemptNews(googleNewsUrl, remaining);
+  return attemptNews(googleNewsUrl, remaining, topic);
 }
 
-export async function fetchNews(windowDays: number = 7): Promise<NewsResult> {
+export async function fetchNews(
+  windowDays: number = 7,
+  topic: NewsTopic = DEFAULT_TOPIC,
+): Promise<NewsResult> {
   const dateQueries = buildDateQueries(windowDays);
   const results = await Promise.all(
     GEOGRAPHY_QUERIES.flatMap((geography) =>
       dateQueries.map((dates) =>
-        fetchOneQuery(`"data center" ${geography} ${dates}`),
+        fetchOneQuery(`${topic.queryTerm} ${geography} ${dates}`, topic),
       ),
     ),
   );
@@ -844,7 +991,7 @@ export async function fetchNews(windowDays: number = 7): Promise<NewsResult> {
 
   return {
     ok: true,
-    newsItems: collapseDuplicates(merged.sort(byPublishedDesc)),
+    newsItems: collapseDuplicates(merged.sort(byPublishedDesc), topic.stopWords),
     truncated,
     partial: succeeded.length < results.length,
   };
@@ -860,8 +1007,9 @@ export async function fetchNews(windowDays: number = 7): Promise<NewsResult> {
  */
 export async function fetchLocalNews(
   windowDays: number = 7,
+  topic: NewsTopic = DEFAULT_TOPIC,
 ): Promise<NewsPayload> {
-  const result = await fetchNews(windowDays);
+  const result = await fetchNews(windowDays, topic);
   return result.ok
     ? {
         newsItems: result.newsItems,
