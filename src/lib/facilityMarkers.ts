@@ -444,25 +444,30 @@ export const FACILITY_ICON_EXPR: unknown[] = [
  *  never reach 0: every facility stays visible and tappable regardless of
  *  its Q/D rank. Interpolated on the same `FACILITY_RADIUS_EXPR` domain the
  *  old circle radius used (`FACILITY_RADIUS_EXPR` already resolves the
- *  hasQD/fallback split), remapped to a render-size floor/ceiling picked so
- *  even the smallest, bold, one-or-two-shape glyphs this file draws stay
- *  legible: ~15px across at the low end, ~34px at the high end
- *  (ICON_CANVAS_PX=24 × icon-size) — back to the original pass's size after
- *  two rounds of feedback going the other way ("noticeably larger," then
- *  "much bigger, bolder"), then two rounds walking it back down ("way too
- *  big," then "one size smaller"). The bolder stroke weights and wider halo
- *  from the "much bigger" pass are kept regardless of this size knob, since
- *  boldness was never the part called out as wrong. */
+ *  hasQD/fallback split).
+ *
+ *  ~6px across at the low end, ~13px at the high end (ICON_CANVAS_PX=24 ×
+ *  icon-size) — two steps below "back to the original pass's size" (~15–34px,
+ *  itself already documented in this file's history as roughly the floor
+ *  for these bold one-or-two-shape glyphs to read as anything but noise),
+ *  per a direct "two sizes smaller" request following that reversion. Flagged
+ *  to the requester rather than silently applied: this is smaller than the
+ *  size this same file previously called the legibility floor. If the icons
+ *  read as blobs at this size, that's the reason — the fix is sizing back
+ *  up, not redrawing the glyphs. The stroke weights and icon halo width
+ *  (`FACILITY_ICON_HALO_WIDTH`) were NOT reduced to match — only size was
+ *  asked for — so a fixed 2px halo may now look thick relative to a ~6–13px
+ *  glyph; a separate, likely-needed follow-up if so. */
 export const FACILITY_ICON_SIZE_EXPR: unknown[] = [
   'interpolate',
   ['linear'],
   FACILITY_RADIUS_EXPR,
   FACILITY_FALLBACK_R,
-  0.62,
+  0.24,
   FACILITY_MIN_R,
-  0.7,
+  0.27,
   FACILITY_MAX_R,
-  1.4,
+  0.55,
 ];
 
 /** Icon-halo width/color — this is the icon layer's replacement for the old
