@@ -816,15 +816,19 @@ const news = await fetchLocalNews();
         // this independent of block order) is more invasive than the bug
         // warrants today.
         const beforeProject = PROJECT_LAYER_IDS.find((id) => map.getLayer(id));
-        // Fully transparent — the icon layer below is what a reader actually
-        // sees now (per the user's own request to make icons "the star of
-        // the show" rather than a decoration on a colored circle). This
-        // layer still exists purely as a stable hit-test target: it always
-        // covers a real minimum radius (`FACILITY_RADIUS_EXPR`), which the
-        // icon's own size can't be relied on for at every rank, and
-        // isFacilityAt/click/hover below are already built against
+        // Fill stays fully transparent — the icon layer below is what a
+        // reader actually sees for the pin's shape (per the user's own
+        // request to make icons "the star of the show" rather than a
+        // decoration on a colored circle). But a stroke-only ring, in the
+        // same per-sector color the icon itself is tinted with, was then
+        // requested on top ("put a colored ring around them to make it
+        // obvious") — so this layer now does double duty: the ring reader's
+        // eyes see, AND the same stable hit-test target it always was. It
+        // always covers a real minimum radius (`FACILITY_RADIUS_EXPR`),
+        // which the icon's own size can't be relied on for at every rank,
+        // and isFacilityAt/click/hover below are already built against
         // FACILITY_LAYER_ID specifically — changing what they target would
-        // be a bigger, riskier edit than keeping an invisible circle here.
+        // be a bigger, riskier edit than keeping this same circle layer.
         map.addLayer(
           {
             id: FACILITY_LAYER_ID,
@@ -834,6 +838,9 @@ const news = await fetchLocalNews();
             paint: {
               "circle-radius": FACILITY_RADIUS_EXPR as any,
               "circle-opacity": 0,
+              "circle-stroke-color": sectorColorExpr(isMapStyleDark(currentStyleId)) as any,
+              "circle-stroke-width": 2.5,
+              "circle-stroke-opacity": FACILITY_OPACITY_EXPR as any,
             },
           } as maplibregl.CircleLayerSpecification,
           beforeProject,

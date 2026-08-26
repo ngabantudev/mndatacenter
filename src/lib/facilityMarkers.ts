@@ -285,8 +285,11 @@ function drawSectorGlyph(ctx: CanvasRenderingContext2D, sector: string, color: s
       break;
     }
     case 'Taconite mining': {
-      // Pickaxe: two bold crossed strokes.
-      ctx.lineWidth = 3;
+      // Pickaxe: two bold crossed strokes. Thicker than the original 3px —
+      // at the larger render sizes this now scales up to, a stroke this
+      // thin read as flimsy next to the solid-filled glyphs. Found in
+      // review of the "bigger, bolder" request.
+      ctx.lineWidth = 5;
       ctx.beginPath();
       ctx.moveTo(6, 6);
       ctx.lineTo(18, 18);
@@ -336,8 +339,9 @@ function drawSectorGlyph(ctx: CanvasRenderingContext2D, sector: string, color: s
       break;
     }
     case 'Sugar mill': {
-      // Wheat: short strokes fanning off a central stem.
-      ctx.lineWidth = 2;
+      // Wheat: short strokes fanning off a central stem. Thicker than the
+      // original 2px for the same reason the pickaxe strokes were bumped.
+      ctx.lineWidth = 3.5;
       ctx.beginPath();
       ctx.moveTo(c, 5);
       ctx.lineTo(c, 19);
@@ -442,19 +446,20 @@ export const FACILITY_ICON_EXPR: unknown[] = [
  *  old circle radius used (`FACILITY_RADIUS_EXPR` already resolves the
  *  hasQD/fallback split), remapped to a render-size floor/ceiling picked so
  *  even the smallest, bold, one-or-two-shape glyphs this file draws stay
- *  legible: ~24px across at the low end, ~54px at the high end
- *  (ICON_CANVAS_PX=24 × icon-size) — bumped up from an initial ~15–34px
- *  pass per direct request for noticeably larger pins. */
+ *  legible: ~40px across at the low end, ~90px at the high end
+ *  (ICON_CANVAS_PX=24 × icon-size) — two size bumps now on direct request
+ *  ("noticeably larger", then "much bigger, bolder"), roughly 2.7x the
+ *  original ~15–34px pass. */
 export const FACILITY_ICON_SIZE_EXPR: unknown[] = [
   'interpolate',
   ['linear'],
   FACILITY_RADIUS_EXPR,
   FACILITY_FALLBACK_R,
-  1.0,
+  1.67,
   FACILITY_MIN_R,
-  1.12,
+  1.85,
   FACILITY_MAX_R,
-  2.25,
+  3.75,
 ];
 
 /** Icon-halo width/color — this is the icon layer's replacement for the old
@@ -462,7 +467,7 @@ export const FACILITY_ICON_SIZE_EXPR: unknown[] = [
  *  colored icon stays readable over both a light and a dark basemap tile
  *  underneath it, the same reasoning that stroke was hardcoded white
  *  regardless of theme. */
-export const FACILITY_ICON_HALO_WIDTH = 1.2;
+export const FACILITY_ICON_HALO_WIDTH = 2;
 export const FACILITY_ICON_HALO_COLOR = '#ffffff';
 
 // ---------------------------------------------------------------------------
