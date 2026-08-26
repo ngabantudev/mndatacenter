@@ -1074,7 +1074,11 @@ const news = await fetchLocalNews();
       facilityHoverPopup = new maplibregl.Popup({
         closeButton: false,
         offset: 12,
-        maxWidth: "224px",
+        // buildFacilityHoverHtml's card is `w-full` (w-56/224px used to be
+        // fixed here), so it exactly fills whatever this leaves after the
+        // popup's own 16px padding each side (.maplibregl-popup-content in
+        // global.css) — same off-center/clipped bug and same fix as #59.
+        maxWidth: "256px",
       })
         .setLngLat(e.features[0].geometry.coordinates as [number, number])
         .setHTML(buildFacilityHoverHtml(facility))
@@ -1099,7 +1103,12 @@ const news = await fetchLocalNews();
       if (activePopup) activePopup.remove();
       new maplibregl.Popup({
         closeButton: true,
-        maxWidth: "320px",
+        // buildFacilityDetailHtml's card is `w-full` (w-80/320px used to be
+        // fixed here), so it exactly fills whatever this leaves after the
+        // popup's own 16px padding each side — same fix as #59, applied here
+        // too since the same fixed-width-inside-maxWidth bug clipped this
+        // card's content on the right.
+        maxWidth: "352px",
         // Same treatment the moratorium/protected-lands click-through record
         // uses — a persistent card the reader dismisses themselves.
         className: "map-record-popup",

@@ -382,7 +382,7 @@ export function buildFacilityDetailHtml(facility: PollutionFacility): string {
   const sectorSw = sectorSwatch(facility.sector);
 
   return `
-    <div class="p-0.5 text-neutral-900 font-sans w-80 select-text">
+    <div class="p-0.5 text-neutral-900 font-sans w-full select-text">
       <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider"
             style="background-color: ${sectorSw.light}1f; color: ${sectorSw.light}">
         <span class="inline-block w-1.5 h-1.5 rounded-full" style="background-color: ${sectorSw.light}"></span>
@@ -409,7 +409,7 @@ export function buildFacilityHoverHtml(facility: PollutionFacility): string {
   const sectorSw = sectorSwatch(facility.sector);
   const qd = QD_BY_FACILITY_ID.get(facility.facilityId);
   return `
-    <div class="p-0.5 text-neutral-900 font-sans w-56 select-text">
+    <div class="p-0.5 text-neutral-900 font-sans w-full select-text">
       <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider"
             style="background-color: ${sectorSw.light}1f; color: ${sectorSw.light}">
         <span class="inline-block w-1.5 h-1.5 rounded-full" style="background-color: ${sectorSw.light}"></span>
