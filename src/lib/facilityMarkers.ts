@@ -419,10 +419,13 @@ export const FACILITY_ICON_EXPR: unknown[] = [
   FALLBACK_ICON_ID,
 ];
 
-/** Icon-size multipliers (rendered px = ICON_CANVAS_PX × value). One step up
- *  from the "one size smaller" pass, per direct request ("one size larger")
- *  — the same values as the earlier "noticeably larger" pass. ~24px across
- *  at the low end, ~54px at the high end. */
+/** Icon-size multipliers (rendered px = ICON_CANVAS_PX × value, before the
+ *  zoom scaling in `zoomScaled()` below is applied). This is also the ring's
+ *  own sizing basis (`ringRadiusFor`, further down) — a direct request to
+ *  make icons "slightly larger" turned out to mean the icon glyph only,
+ *  explicitly NOT the ring around it ("not the ring, just the icons"), so
+ *  that bump lives in `ICON_VISUAL_BOOST` below instead of here, where it
+ *  would have grown the ring too. These stay unchanged. */
 const ICON_SIZE_FALLBACK = 1.0;
 const ICON_SIZE_MIN = 1.12;
 const ICON_SIZE_MAX = 2.25;
@@ -509,7 +512,21 @@ function zoomScaled(expr: unknown): unknown[] {
  *  `icon-ignore-placement` stay `true` (every facility must stay visible,
  *  per this file's own rule above) — this fixes the collision by making the
  *  colliding shapes smaller, not by hiding any of them. */
-export const FACILITY_ICON_SIZE_EXPR: unknown[] = zoomScaled(facilityIconBaseSizeExpr);
+
+/** Purely visual — scales the icon glyph's own rendered size without
+ *  touching `facilityIconBaseSizeExpr`, which the ring/hit-circle radius
+ *  (`ringRadiusFor`, below) is computed from. Exists specifically because a
+ *  "slightly larger" request turned out to mean the icon only, not the ring
+ *  around it — multiplying `facilityIconBaseSizeExpr` itself would have
+ *  grown both, since the ring is deliberately derived from that same base
+ *  size. This one knob is the icon-only exception to that coupling. */
+const ICON_VISUAL_BOOST = 1.15;
+
+export const FACILITY_ICON_SIZE_EXPR: unknown[] = zoomScaled([
+  '*',
+  facilityIconBaseSizeExpr,
+  ICON_VISUAL_BOOST,
+]);
 
 /** Icon-halo width/color — this is the icon layer's replacement for the old
  *  circle layer's white `circle-stroke`: a fixed-width light outline so a
