@@ -214,23 +214,27 @@ export function sectorColorExpr(dark: boolean): unknown[] {
 }
 
 // ---------------------------------------------------------------------------
-// On-pin icons — a second signal beyond color, for the same reason
-// FilterFacilities.astro's sector checklist got icons (see that file):
-// color alone doesn't distinguish sectors for a colorblind reader or in a
-// black-and-white screenshot. MapLibre circle layers can't carry an icon
-// directly, so this is a second `symbol` layer stacked on the same source,
-// drawn from images generated at runtime on an offscreen <canvas> — not a
-// bundled asset, per CLAUDE.md §7's zero-third-party-assets rule, and not a
-// reuse of the lucide-astro icons the sidebar uses, which are Astro
+// On-pin icons — THE pin now, not a decoration on top of a colored circle.
+// The circle layer (`FACILITY_LAYER_ID`, below) still exists but is fully
+// transparent — kept only as a stable, guaranteed-minimum-size hit-test
+// target for click/hover, per its own comment where it's built. Everything
+// a reader actually sees is this icon layer: shape by sector, color by
+// sector (via `icon-color`/`sectorColorExpr` on an SDF image — see
+// `registerFacilityIcons`), size by Q/D rank. MapLibre circle layers can't
+// carry an icon directly, so this is a `symbol` layer stacked on the same
+// source, drawn from images generated at runtime on an offscreen <canvas> —
+// not a bundled asset, per CLAUDE.md §7's zero-third-party-assets rule, and
+// not a reuse of the lucide-astro icons the sidebar uses, which are Astro
 // components with no image-file form this could hand to `map.addImage`.
 //
-// DELIBERATELY SIMPLE, NOT LITERAL PICTOGRAMS. The smallest pins
-// (`FACILITY_FALLBACK_R` = 4px radius, 8px across) cannot show a recognizable
-// factory-with-chimney silhouette at any size — that detail simply doesn't
-// survive 8 pixels. Every glyph here is one or two bold filled shapes, sized
-// to read as a distinct mark even small, and `FACILITY_ICON_SIZE_EXPR` hides
-// the icon below a radius where even that isn't legible (the color still
-// shows at every size — this is an additional signal, never the only one).
+// DELIBERATELY SIMPLE, NOT LITERAL PICTOGRAMS. Even at this layer's largest
+// size a recognizable factory-with-chimney silhouette wouldn't survive
+// rendering at pin scale — every glyph here is one or two bold filled
+// shapes, chosen to read as a distinct mark from every other sector's glyph
+// at a glance. Unlike the color-and-icon-together design this replaced,
+// `FACILITY_ICON_SIZE_EXPR` now has a floor it never crosses: with the
+// circle gone, the icon is the only visible thing a facility has, so it can
+// never shrink to 0 the way it briefly did in an earlier pass.
 //
 // This function must only ever be CALLED from client-side code (MapParent.astro's
 // script) — it touches `document`/canvas, which doesn't exist during Astro's
@@ -383,14 +387,21 @@ export function registerFacilityIcons(map: maplibregl.Map): void {
     canvas.height = ICON_CANVAS_PX;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    // White reads clearly against every color in SECTOR_PALETTE, which are
-    // all mid-to-dark saturated hues — one icon image per sector rather
-    // than one per sector per basemap theme.
+    // Filled solid white on transparent — registered below with `sdf: true`,
+    // which tells MapLibre to treat this image's alpha channel as a mask it
+    // recolors per-feature via the symbol layer's own `icon-color` paint
+    // property (`sectorColorExpr`, the same expression the old circle layer
+    // used for `circle-color`). The actual fill color drawn here doesn't
+    // matter for an SDF image — only the alpha/shape does — so one image per
+    // sector still works for both basemap themes, same as before.
     drawSectorGlyph(ctx, sector, '#ffffff');
     // MapLibre's addImage() type signature doesn't accept HTMLCanvasElement
     // directly (only ImageData/ImageBitmap/HTMLImageElement) — pull the
     // pixels back out as ImageData rather than widen the type unsafely.
-    map.addImage(id, ctx.getImageData(0, 0, ICON_CANVAS_PX, ICON_CANVAS_PX), { pixelRatio: 2 });
+    map.addImage(id, ctx.getImageData(0, 0, ICON_CANVAS_PX, ICON_CANVAS_PX), {
+      pixelRatio: 2,
+      sdf: true,
+    });
   };
   for (const sector of POLLUTION_FACILITY_SECTORS) {
     register(sectorIconImageId(sector), sector);
@@ -418,23 +429,34 @@ export const FACILITY_ICON_EXPR: unknown[] = [
   FALLBACK_ICON_ID,
 ];
 
-/** Icon size, scaled down from the circle radius (`FACILITY_RADIUS_EXPR`
- *  already resolves the hasQD/fallback split — reused directly rather than
- *  re-testing `hasQD` a second time here) so the glyph sits inside the pin
- *  rather than overflowing it, and dropped to 0 below a radius where the
- *  glyph can no longer read as anything but noise — the color alone still
- *  carries the sector at that size. */
+/** Icon size. The icon IS the pin now — there's no colored circle behind it
+ *  to fall back on — so unlike the size expression this replaced, it must
+ *  never reach 0: every facility stays visible and tappable regardless of
+ *  its Q/D rank. Interpolated on the same `FACILITY_RADIUS_EXPR` domain the
+ *  old circle radius used (`FACILITY_RADIUS_EXPR` already resolves the
+ *  hasQD/fallback split), remapped to a render-size floor/ceiling picked so
+ *  even the smallest, bold, one-or-two-shape glyphs this file draws stay
+ *  legible: ~15px across at the low end, ~34px at the high end
+ *  (ICON_CANVAS_PX=24 × icon-size). */
 export const FACILITY_ICON_SIZE_EXPR: unknown[] = [
   'interpolate',
   ['linear'],
   FACILITY_RADIUS_EXPR,
-  7,
-  0, // pins at/under ~7px radius: icon hidden, color-only
-  7.01,
-  0.5,
+  FACILITY_FALLBACK_R,
+  0.62,
+  FACILITY_MIN_R,
+  0.7,
   FACILITY_MAX_R,
-  0.85,
+  1.4,
 ];
+
+/** Icon-halo width/color — this is the icon layer's replacement for the old
+ *  circle layer's white `circle-stroke`: a fixed-width light outline so a
+ *  colored icon stays readable over both a light and a dark basemap tile
+ *  underneath it, the same reasoning that stroke was hardcoded white
+ *  regardless of theme. */
+export const FACILITY_ICON_HALO_WIDTH = 1.2;
+export const FACILITY_ICON_HALO_COLOR = '#ffffff';
 
 // ---------------------------------------------------------------------------
 // The GeoJSON source. Built once at module scope — this registry is fixed for

@@ -141,14 +141,13 @@ const sortedFacilities = [...POLLUTION_FACILITIES].sort((a, b) => a.name.localeC
          source of truth for the palette (`FACILITY_SECTOR_SWATCHES`) draws
          both. -->
     <p class="mt-2 pt-2 border-t border-hair text-[9px] leading-snug text-ink-4">
-      Pin color and icon both show the type of facility (listed above) — the
-      icon fades out on the smallest pins, where it's too small to read, but
-      the color always stays. Pin size shows how much it could affect air
-      quality in nearby parks and wilderness areas — never a single "total
-      pollution" number, since that isn't something that can honestly be
-      added up across different pollutants. A smaller, faded pin means that
-      ranking hasn't been calculated for this facility — not that it ranks
-      low.
+      Each pin is a colored icon shape (listed above) — the shape and color
+      both show the type of facility. Pin size shows how much it could
+      affect air quality in nearby parks and wilderness areas — never a
+      single "total pollution" number, since that isn't something that can
+      honestly be added up across different pollutants. A faded pin means
+      that ranking hasn't been calculated for this facility — not that it
+      ranks low.
     </p>
 
     <!-- Accessible DOM record list for facility pins — separate from

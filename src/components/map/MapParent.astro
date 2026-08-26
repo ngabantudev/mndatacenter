@@ -142,6 +142,8 @@ const news = await fetchLocalNews();
     FACILITY_API_KEY,
     FACILITY_GEOJSON,
     FACILITY_ICON_EXPR,
+    FACILITY_ICON_HALO_COLOR,
+    FACILITY_ICON_HALO_WIDTH,
     FACILITY_ICON_LAYER_ID,
     FACILITY_ICON_SIZE_EXPR,
     FACILITY_LAYER_ID,
@@ -814,6 +816,15 @@ const news = await fetchLocalNews();
         // this independent of block order) is more invasive than the bug
         // warrants today.
         const beforeProject = PROJECT_LAYER_IDS.find((id) => map.getLayer(id));
+        // Fully transparent — the icon layer below is what a reader actually
+        // sees now (per the user's own request to make icons "the star of
+        // the show" rather than a decoration on a colored circle). This
+        // layer still exists purely as a stable hit-test target: it always
+        // covers a real minimum radius (`FACILITY_RADIUS_EXPR`), which the
+        // icon's own size can't be relied on for at every rank, and
+        // isFacilityAt/click/hover below are already built against
+        // FACILITY_LAYER_ID specifically — changing what they target would
+        // be a bigger, riskier edit than keeping an invisible circle here.
         map.addLayer(
           {
             id: FACILITY_LAYER_ID,
@@ -821,20 +832,24 @@ const news = await fetchLocalNews();
             source: FACILITY_SOURCE_ID,
             layout: { visibility: "none" },
             paint: {
-              "circle-color": sectorColorExpr(isMapStyleDark(currentStyleId)) as any,
               "circle-radius": FACILITY_RADIUS_EXPR as any,
-              "circle-stroke-width": 1.5,
-              "circle-stroke-color": "#ffffff",
-              "circle-opacity": FACILITY_OPACITY_EXPR as any,
+              "circle-opacity": 0,
             },
           } as maplibregl.CircleLayerSpecification,
           beforeProject,
         );
-        // A second signal beyond color (facilityMarkers.ts's module note on
-        // why explains the reasoning and the size-based legibility cutoff).
-        // Images are cleared by every basemap swap the same as sources/
-        // layers are, which is why this call lives inside the same
-        // layer-doesn't-exist-yet guard — both need re-creating together.
+        // THE pin, not a decoration on top of one — see facilityMarkers.ts's
+        // module note above `registerFacilityIcons`. Color comes from
+        // `icon-color` against an SDF (alpha-mask) image, the same
+        // `sectorColorExpr` the old circle layer used for `circle-color`;
+        // the halo is this layer's replacement for that circle's white
+        // stroke, for the same reason (legibility over either basemap
+        // theme); opacity is the old circle-opacity expression, moved here
+        // since this is now the layer a "no Q/D data" facility needs to read
+        // as fainter. Images are cleared by every basemap swap the same as
+        // sources/layers are, which is why registerFacilityIcons() lives
+        // inside this same layer-doesn't-exist-yet guard — both need
+        // re-creating together.
         registerFacilityIcons(map);
         map.addLayer(
           {
@@ -847,6 +862,12 @@ const news = await fetchLocalNews();
               "icon-size": FACILITY_ICON_SIZE_EXPR as any,
               "icon-allow-overlap": true,
               "icon-ignore-placement": true,
+            },
+            paint: {
+              "icon-color": sectorColorExpr(isMapStyleDark(currentStyleId)) as any,
+              "icon-halo-color": FACILITY_ICON_HALO_COLOR,
+              "icon-halo-width": FACILITY_ICON_HALO_WIDTH,
+              "icon-opacity": FACILITY_OPACITY_EXPR as any,
             },
           } as maplibregl.SymbolLayerSpecification,
           beforeProject,
