@@ -54,6 +54,13 @@ import { nf as numberFmt } from '~/lib/ratepayerWidget';
 
 export const FACILITY_SOURCE_ID = 'pollution-facilities';
 export const FACILITY_LAYER_ID = 'pollution-facilities-circles';
+/** The icon symbol layer stacked on the circle layer above — a visual
+ *  addition only, never a separate hit-test target. Deliberately excluded
+ *  from `FACILITY_LAYER_IDS`: hit-testing (`isFacilityAt`, hover/click)
+ *  stays on the circle layer, which always exists at a guaranteed minimum
+ *  size, unlike the icon, whose own size expression drops to 0 on the
+ *  smallest pins. */
+export const FACILITY_ICON_LAYER_ID = 'pollution-facilities-icons';
 /** This controller's own map layers — exported the way
  *  `MORATORIUM_LAYER_IDS` is, for the hit test and the layer stack. */
 export const FACILITY_LAYER_IDS = [FACILITY_LAYER_ID];
@@ -205,6 +212,229 @@ export function sectorColorExpr(dark: boolean): unknown[] {
     dark ? FALLBACK_SWATCH.dark : FALLBACK_SWATCH.light,
   ];
 }
+
+// ---------------------------------------------------------------------------
+// On-pin icons — a second signal beyond color, for the same reason
+// FilterFacilities.astro's sector checklist got icons (see that file):
+// color alone doesn't distinguish sectors for a colorblind reader or in a
+// black-and-white screenshot. MapLibre circle layers can't carry an icon
+// directly, so this is a second `symbol` layer stacked on the same source,
+// drawn from images generated at runtime on an offscreen <canvas> — not a
+// bundled asset, per CLAUDE.md §7's zero-third-party-assets rule, and not a
+// reuse of the lucide-astro icons the sidebar uses, which are Astro
+// components with no image-file form this could hand to `map.addImage`.
+//
+// DELIBERATELY SIMPLE, NOT LITERAL PICTOGRAMS. The smallest pins
+// (`FACILITY_FALLBACK_R` = 4px radius, 8px across) cannot show a recognizable
+// factory-with-chimney silhouette at any size — that detail simply doesn't
+// survive 8 pixels. Every glyph here is one or two bold filled shapes, sized
+// to read as a distinct mark even small, and `FACILITY_ICON_SIZE_EXPR` hides
+// the icon below a radius where even that isn't legible (the color still
+// shows at every size — this is an additional signal, never the only one).
+//
+// This function must only ever be CALLED from client-side code (MapParent.astro's
+// script) — it touches `document`/canvas, which doesn't exist during Astro's
+// server-side render. It's fine to *export* at module scope (nothing here
+// runs until called), just never invoke it outside a browser context.
+// ---------------------------------------------------------------------------
+
+/** Stable id `map.addImage` registers each sector's icon under. */
+function sectorIconImageId(sector: string): string {
+  return `facility-icon-${POLLUTION_FACILITY_SECTORS.indexOf(sector)}`;
+}
+
+const ICON_CANVAS_PX = 24;
+
+/** One bold, small-scale glyph per sector, filled in the given color on a
+ *  transparent 24x24 canvas. Shapes are deliberately abstract rather than
+ *  literal (see module note above) — chosen to each read as a visually
+ *  distinct silhouette from the others at a glance, matching the icon used
+ *  for the same sector in FilterFacilities.astro's checklist. */
+function drawSectorGlyph(ctx: CanvasRenderingContext2D, sector: string, color: string): void {
+  const c = ICON_CANVAS_PX / 2; // 12 — center
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  switch (sector) {
+    case 'Taconite mining/processing': {
+      // Mountain: a filled triangle with a small peak notch.
+      ctx.beginPath();
+      ctx.moveTo(c, 4);
+      ctx.lineTo(19, 19);
+      ctx.lineTo(5, 19);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    }
+    case 'Taconite processing': {
+      // Factory: a body block plus a chimney block.
+      ctx.fillRect(5, 12, 14, 8);
+      ctx.fillRect(8, 6, 4, 8);
+      break;
+    }
+    case 'Taconite mining': {
+      // Pickaxe: two bold crossed strokes.
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(6, 6);
+      ctx.lineTo(18, 18);
+      ctx.moveTo(18, 6);
+      ctx.lineTo(6, 18);
+      ctx.stroke();
+      break;
+    }
+    case 'Coal power generation': {
+      // Flame: a teardrop built from two curves.
+      ctx.beginPath();
+      ctx.moveTo(c, 4);
+      ctx.quadraticCurveTo(19, 12, 12, 20);
+      ctx.quadraticCurveTo(5, 12, c, 4);
+      ctx.fill();
+      break;
+    }
+    case 'Pulp/paper': {
+      // Pine tree: a filled triangle over a short trunk rect.
+      ctx.beginPath();
+      ctx.moveTo(c, 4);
+      ctx.lineTo(18, 16);
+      ctx.lineTo(6, 16);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillRect(10, 16, 4, 4);
+      break;
+    }
+    case 'Petroleum refining': {
+      // Fuel pump: a rounded body plus a small nozzle circle.
+      const radius = 2;
+      const x = 7;
+      const y = 6;
+      const w = 8;
+      const h = 13;
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.arcTo(x + w, y, x + w, y + h, radius);
+      ctx.arcTo(x + w, y + h, x, y + h, radius);
+      ctx.arcTo(x, y + h, x, y, radius);
+      ctx.arcTo(x, y, x + w, y, radius);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(17, 8, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+    case 'Sugar mill': {
+      // Wheat: short strokes fanning off a central stem.
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(c, 5);
+      ctx.lineTo(c, 19);
+      for (const [dx, dy] of [
+        [-5, -5],
+        [5, -5],
+        [-5, 1],
+        [5, 1],
+        [-4, 7],
+        [4, 7],
+      ]) {
+        ctx.moveTo(c, 8 + dy);
+        ctx.lineTo(c + dx, 8 + dy - 3);
+      }
+      ctx.stroke();
+      break;
+    }
+    case 'Electricity generation via combustion': {
+      // Lightning bolt.
+      ctx.beginPath();
+      ctx.moveTo(13, 3);
+      ctx.lineTo(6, 13);
+      ctx.lineTo(11, 13);
+      ctx.lineTo(9, 21);
+      ctx.lineTo(18, 10);
+      ctx.lineTo(13, 10);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    }
+    default: {
+      // Fallback: a plain filled circle, so a future sector added to
+      // POLLUTION_FACILITY_SECTORS without a case here still gets a visible
+      // (if generic) mark rather than a silently blank icon.
+      ctx.beginPath();
+      ctx.arc(c, c, 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+/** Builds and registers one icon image per sector on `map`, safe to call
+ *  repeatedly (skips a sector already registered) — called from
+ *  MapParent.astro's `addDataLayer()`, which already re-runs after every
+ *  basemap swap because `setStyle()` clears custom images along with
+ *  everything else, the same reason that function re-adds the facility
+ *  circle layer itself each time. */
+export function registerFacilityIcons(map: maplibregl.Map): void {
+  const register = (id: string, sector: string): void => {
+    if (map.hasImage(id)) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = ICON_CANVAS_PX;
+    canvas.height = ICON_CANVAS_PX;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    // White reads clearly against every color in SECTOR_PALETTE, which are
+    // all mid-to-dark saturated hues — one icon image per sector rather
+    // than one per sector per basemap theme.
+    drawSectorGlyph(ctx, sector, '#ffffff');
+    // MapLibre's addImage() type signature doesn't accept HTMLCanvasElement
+    // directly (only ImageData/ImageBitmap/HTMLImageElement) — pull the
+    // pixels back out as ImageData rather than widen the type unsafely.
+    map.addImage(id, ctx.getImageData(0, 0, ICON_CANVAS_PX, ICON_CANVAS_PX), { pixelRatio: 2 });
+  };
+  for (const sector of POLLUTION_FACILITY_SECTORS) {
+    register(sectorIconImageId(sector), sector);
+  }
+  // Unreachable in normal operation (see FALLBACK_ICON_ID's own doc
+  // comment) but `FACILITY_ICON_EXPR`'s `match` fallback branch still
+  // references it, and an unregistered image id would make MapLibre warn
+  // ("Image ... could not be loaded") every render if it were ever hit.
+  register(FALLBACK_ICON_ID, '__fallback__');
+}
+
+/** id of the generic circle glyph registered for a sector `match` can't
+ *  resolve — reachable only if a future sector lands in the GeoJSON without
+ *  a matching entry in `POLLUTION_FACILITY_SECTORS`, which shouldn't happen
+ *  since that constant is itself derived from the same facility list, but
+ *  `match` requires a fallback branch regardless. */
+const FALLBACK_ICON_ID = 'facility-icon-fallback';
+
+/** A MapLibre `match` expression resolving each feature's `sector` to its
+ *  registered icon image id. */
+export const FACILITY_ICON_EXPR: unknown[] = [
+  'match',
+  ['get', 'sector'],
+  ...POLLUTION_FACILITY_SECTORS.flatMap((sector) => [sector, sectorIconImageId(sector)]),
+  FALLBACK_ICON_ID,
+];
+
+/** Icon size, scaled down from the circle radius (`FACILITY_RADIUS_EXPR`
+ *  already resolves the hasQD/fallback split — reused directly rather than
+ *  re-testing `hasQD` a second time here) so the glyph sits inside the pin
+ *  rather than overflowing it, and dropped to 0 below a radius where the
+ *  glyph can no longer read as anything but noise — the color alone still
+ *  carries the sector at that size. */
+export const FACILITY_ICON_SIZE_EXPR: unknown[] = [
+  'interpolate',
+  ['linear'],
+  FACILITY_RADIUS_EXPR,
+  7,
+  0, // pins at/under ~7px radius: icon hidden, color-only
+  7.01,
+  0.5,
+  FACILITY_MAX_R,
+  0.85,
+];
 
 // ---------------------------------------------------------------------------
 // The GeoJSON source. Built once at module scope — this registry is fixed for

@@ -138,8 +138,12 @@ const news = await fetchLocalNews();
     buildFacilityHoverHtml,
     facilityById,
     facilityForFeature,
+    registerFacilityIcons,
     FACILITY_API_KEY,
     FACILITY_GEOJSON,
+    FACILITY_ICON_EXPR,
+    FACILITY_ICON_LAYER_ID,
+    FACILITY_ICON_SIZE_EXPR,
     FACILITY_LAYER_ID,
     FACILITY_LIST_SELECT_EVENT,
     FACILITY_MARKER_SELECT_EVENT,
@@ -826,6 +830,27 @@ const news = await fetchLocalNews();
           } as maplibregl.CircleLayerSpecification,
           beforeProject,
         );
+        // A second signal beyond color (facilityMarkers.ts's module note on
+        // why explains the reasoning and the size-based legibility cutoff).
+        // Images are cleared by every basemap swap the same as sources/
+        // layers are, which is why this call lives inside the same
+        // layer-doesn't-exist-yet guard — both need re-creating together.
+        registerFacilityIcons(map);
+        map.addLayer(
+          {
+            id: FACILITY_ICON_LAYER_ID,
+            type: "symbol",
+            source: FACILITY_SOURCE_ID,
+            layout: {
+              visibility: "none",
+              "icon-image": FACILITY_ICON_EXPR as any,
+              "icon-size": FACILITY_ICON_SIZE_EXPR as any,
+              "icon-allow-overlap": true,
+              "icon-ignore-placement": true,
+            },
+          } as maplibregl.SymbolLayerSpecification,
+          beforeProject,
+        );
       }
       applyFacilityFilters();
 
@@ -844,16 +869,17 @@ const news = await fetchLocalNews();
      *  checkbox's own state) and from the `mapfilterchange` handler below. */
     const applyFacilityFilters = (): void => {
       if (!map.getLayer(FACILITY_LAYER_ID)) return;
-      map.setLayoutProperty(
-        FACILITY_LAYER_ID,
-        "visibility",
-        facilitiesWanted ? "visible" : "none",
-      );
-      map.setFilter(FACILITY_LAYER_ID, [
-        "in",
-        ["get", "sector"],
-        ["literal", facilitySectors],
-      ] as any);
+      const visibility = facilitiesWanted ? "visible" : "none";
+      const filter = ["in", ["get", "sector"], ["literal", facilitySectors]] as any;
+      map.setLayoutProperty(FACILITY_LAYER_ID, "visibility", visibility);
+      map.setFilter(FACILITY_LAYER_ID, filter);
+      // The icon layer mirrors the circle layer's own visibility/filter —
+      // same source, same sectors, same on/off state — so a hidden pin
+      // never leaves its icon rendered on its own.
+      if (map.getLayer(FACILITY_ICON_LAYER_ID)) {
+        map.setLayoutProperty(FACILITY_ICON_LAYER_ID, "visibility", visibility);
+        map.setFilter(FACILITY_ICON_LAYER_ID, filter);
+      }
       // If the facility whose panel is currently open just got filtered off
       // the map (layer switched off, or its sector unchecked), close its
       // panel too rather than leaving it open on a pin that's no longer
