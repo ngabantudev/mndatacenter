@@ -419,14 +419,13 @@ export const FACILITY_ICON_EXPR: unknown[] = [
   FALLBACK_ICON_ID,
 ];
 
-/** Icon-size multipliers (rendered px = ICON_CANVAS_PX × value). Undone back
- *  to the "one size smaller" pass — the "two sizes smaller" step past that
- *  (rendering ~6–13px, below this file's own documented ~15px legibility
- *  floor for these glyphs) was reverted on direct request ("whoa undo
- *  that"). ~15px across at the low end, ~34px at the high end. */
-const ICON_SIZE_FALLBACK = 0.62;
-const ICON_SIZE_MIN = 0.7;
-const ICON_SIZE_MAX = 1.4;
+/** Icon-size multipliers (rendered px = ICON_CANVAS_PX × value). One step up
+ *  from the "one size smaller" pass, per direct request ("one size larger")
+ *  — the same values as the earlier "noticeably larger" pass. ~24px across
+ *  at the low end, ~54px at the high end. */
+const ICON_SIZE_FALLBACK = 1.0;
+const ICON_SIZE_MIN = 1.12;
+const ICON_SIZE_MAX = 2.25;
 
 /** Icon size, computed directly from cumulativeQD/hasQD — the primary
  *  quantity now, not derived from a separately-tuned radius. THE icon is
@@ -461,8 +460,11 @@ export const FACILITY_ICON_HALO_COLOR = '#ffffff';
 /** Padding, in px, the ring/hit-circle extends beyond the icon's own
  *  rendered edge — a snug ring would clip the icon's halo; this leaves it
  *  room to breathe and keeps the tap target slightly larger than the glyph
- *  itself. */
-const FACILITY_RING_PADDING_PX = 4;
+ *  itself. Pulled in one step (was 4) per direct request ("rings one size
+ *  smaller") — this only tightens the ring's own gap around the icon; it
+ *  does not affect icon size, which is a separate, independently-adjusted
+ *  quantity now that the two are no longer coupled the way they used to be. */
+const FACILITY_RING_PADDING_PX = 2;
 
 /** The ring around each icon (this layer's `circle-stroke-*` paint, set in
  *  MapParent.astro) AND the hit-test target's radius — both driven by this
