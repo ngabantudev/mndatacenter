@@ -288,3 +288,7 @@ npm run dev       # Start Astro dev server
 npm run check     # Run astro check & type verification — MUST STAY AT 0 ERRORS
 npm run build     # Production build
 ```
+
+---
+
+@DURABILITY.md
