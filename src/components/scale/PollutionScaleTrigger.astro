@@ -1,0 +1,56 @@
+---
+// src/components/scale/PollutionScaleTrigger.astro
+//
+// The entry point for the pollution scale comparison panel — a single line
+// in the filters rail's footer, next to "Last updated".
+//
+// WHY THE RAIL FOOTER AND NOT THE TOP-CENTRE STACK
+//
+// The top-centre stack over the map (CleanGridBar + CampaignBanner) is
+// already at its width budget — see the note on that wrapper in
+// MapParent.astro, which works out the exact pixel math for why a third box
+// there does not fit at any width below ~1280px. The mobile toolbar's three
+// tabs (Filters / Bills / News) are a similarly fixed budget; a fourth tab
+// is a bigger structural change than a v1 comparison panel earns.
+//
+// The rail footer is reachable at every width without adding to either
+// budget: on desktop it's always visible in the sidebar, and on a phone it's
+// one scroll inside the Filters sheet the toolbar already opens. It is also
+// the right *weight* for what this panel is — credibility armor for a
+// reader already looking at the filters, not a headline claim competing with
+// the 2040 mandate for the first thing anyone sees.
+import { Scale } from "lucide-astro";
+---
+
+<button
+  id="ps-trigger"
+  type="button"
+  class="flex items-center justify-center gap-1.5 w-full text-[10px] font-semibold text-ink-3 hover:text-ink transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 rounded"
+>
+  <Scale size={11} class="shrink-0" aria-hidden="true" />
+  <span>How data centers compare to MN's top polluters</span>
+</button>
+
+<script>
+  import { onReady } from "~/lib/domReady";
+  import { OPEN_POLLUTION_SCALE_EVENT } from "~/lib/pollutionScaleClient";
+
+  let triggerCleanups: (() => void)[] = [];
+
+  function initPollutionScaleTrigger(): void {
+    const btn = document.getElementById("ps-trigger");
+    if (!btn) return;
+
+    while (triggerCleanups.length > 0) {
+      triggerCleanups.pop()?.();
+    }
+
+    const onClick = () => {
+      document.dispatchEvent(new CustomEvent(OPEN_POLLUTION_SCALE_EVENT));
+    };
+    btn.addEventListener("click", onClick);
+    triggerCleanups.push(() => btn.removeEventListener("click", onClick));
+  }
+
+  onReady(initPollutionScaleTrigger);
+</script>

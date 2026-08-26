@@ -1,0 +1,494 @@
+---
+// src/components/scale/PollutionScaleTracker.astro
+//
+// Minnesota's largest documented pollution sources, set against what is
+// publicly documented about data centers — the record behind
+// PollutionScaleTrigger.astro's rail-footer link. Same `<dialog>` treatment
+// as CleanGridTracker.astro, for the same reasons: top-layer rendering,
+// focus trapping, Esc-to-close, and an inert background, none of which is
+// worth reimplementing. See that file's header note for the centring and
+// `open:flex` details, which apply unchanged here.
+//
+// See src/data/mnPollutionScale.ts before touching any row in here — that
+// file's header explains the two confidence fields, the five ways a cell can
+// be empty, and the standing prohibition on deriving a CO2e figure from MW.
+//
+// THE BARS ARE THE FEATURE, NOT DECORATION.
+//
+// This is the one place on the site (so far) where a chart carries real
+// information rather than illustrating a number already stated in prose —
+// the user asked specifically to *see* the scale, not just read it. So each
+// metric section plots facilities as horizontal bars, sized against the
+// largest value in that section only (never across sections — the units
+// differ and comparing a tons-of-CO2e bar's length to a gallons-of-water
+// bar's length would imply they're on the same axis, which they are not).
+//
+// Bar treatment encodes confidence, and it is the whole point of the
+// exercise: SOLID = a published, confirmed number. HATCHED, drawn at an
+// *approximate* length = a real fact from a secondary source, not yet
+// independently verified — visible enough to convey scale, textured enough
+// that nobody mistakes it for a confirmed figure. DASHED AND EMPTY = a named
+// registry was searched and returned nothing; that absence is content, with
+// its own sentence below, not a blank the reader has to interpret.
+import { X, Factory, Scale as ScaleIcon } from "lucide-astro";
+import {
+  GHG_ROWS,
+  MW_ROWS,
+  WATER_ROWS,
+  AIR_PERMIT_ROWS,
+  TRI_TOP_FACILITIES,
+  TRI_SOURCE,
+  MN_GRID_CO2_INTENSITY,
+  KNOWN_GAPS,
+  LAST_REVIEWED,
+  triProfileUrl,
+  type PollutionRow,
+} from "~/data/mnPollutionScale";
+import { ExternalLink } from "lucide-astro";
+import { nf as numberFmt } from "~/lib/ratepayerWidget";
+
+// `numberFmt` is `~/lib/ratepayerWidget`'s shared `nf` — this file used to
+// build its own second `Intl.NumberFormat('en-US')` instance (a third one,
+// alongside facilityMarkers.ts's own now-fixed duplicate), the exact
+// per-module duplication `nf` was extracted to prevent. Found in review.
+
+/** The value used to size a bar — a published figure, or an approximate one
+ * carried only for a pending row. Rows with neither render no bar at all. */
+function plottable(row: PollutionRow): number | null {
+  if (row.valueState === "published") return row.value;
+  if (row.valueState === "pending_verification" && row.approxValue != null) {
+    return row.approxValue;
+  }
+  return null;
+}
+
+function unitOf(row: PollutionRow): string {
+  if (row.valueState === "published") return row.unit;
+  if (row.valueState === "pending_verification") return row.approxUnit ?? "";
+  return "";
+}
+
+/** Sizes every row in a section against that section's own largest value —
+ * never across sections, which use different units entirely. */
+function withWidths(rows: PollutionRow[]) {
+  const values = rows.map(plottable).filter((v): v is number => v != null);
+  const max = values.length > 0 ? Math.max(...values) : 1;
+  return rows.map((row) => {
+    const value = plottable(row);
+    return { row, value, widthPct: value != null ? Math.max(6, (value / max) * 100) : null };
+  });
+}
+
+/** One short line for a row that plots no bar at all — the reason, not the
+ * full finding prose (that lives in the paragraph below the bars). */
+function emptyReason(row: PollutionRow): string {
+  switch (row.valueState) {
+    case "pending_verification":
+      return "figure pending — needs a direct primary-source pull";
+    case "no_record_found":
+      return `no record found in ${row.registryName}`;
+    case "not_applicable":
+      return "not applicable — different regulatory category";
+    case "redacted":
+      return "withheld as trade secret";
+    default:
+      return "";
+  }
+}
+
+const ghg = withWidths(GHG_ROWS);
+const mw = withWidths(MW_ROWS);
+const water = withWidths(WATER_ROWS);
+
+const findingsFor = (rows: PollutionRow[]) =>
+  rows.filter(
+    (r) => r.valueState === "no_record_found" || r.valueState === "not_applicable",
+  );
+---
+
+<dialog
+  id="ps-dialog"
+  aria-labelledby="ps-dialog-title"
+  class="font-sans fixed inset-0 m-auto open:flex h-fit max-h-[92dvh] w-[min(38rem,94vw)] flex-col overflow-hidden rounded-2xl border border-hair bg-panel p-0 text-ink backdrop:bg-black/50 backdrop:backdrop-blur-sm"
+>
+  <div
+    class="band bg-panel shrink-0 flex items-start justify-between gap-3 px-4 py-3.5 border-b border-hair"
+  >
+    <div class="min-w-0">
+      <h2 id="ps-dialog-title" class="text-sm font-bold text-ink leading-tight flex items-center gap-1.5">
+        <ScaleIcon size={14} class="text-ink-3 shrink-0" aria-hidden="true" />
+        Minnesota Pollution — Scale Comparison
+      </h2>
+      <p class="mt-1 text-[11px] text-ink-3 leading-snug">
+        How data centers compare to the state's largest documented pollution sources, on the metrics Minnesota actually measures and publishes.
+      </p>
+    </div>
+    <button
+      id="ps-dialog-close"
+      type="button"
+      aria-label="Close"
+      class="shrink-0 rounded-lg p-1 text-ink-4 hover:text-ink hover:bg-hover transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+    >
+      <X size={16} />
+    </button>
+  </div>
+
+  <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-5">
+    <div class="stat-well rounded-lg p-3 text-[11px] leading-relaxed text-ink-2">
+      On the pollution metrics Minnesota measures and publishes — greenhouse
+      gases, toxic chemical releases, permitted water withdrawal — the
+      state's largest documented sources are <span class="font-semibold text-ink"
+        >taconite mining and processing, coal generation, pulp and paper, and
+        petroleum refining</span
+      >. No Minnesota data center appears on any of those lists. Data centers
+      are large on one axis: new electric generating capacity being built to
+      serve them under Energy Sales Agreements at the PUC. On two more axes —
+      water appropriation and issued air permits — there is no public record
+      to compare at all.
+    </div>
+
+    <!-- Legend -->
+    <div class="flex flex-wrap gap-x-4 gap-y-1.5 text-[9.5px] text-ink-3">
+      <span class="inline-flex items-center gap-1.5">
+        <i class="inline-block w-3 h-2 rounded-sm bg-[var(--ps-legacy)]" aria-hidden="true"></i>
+        Legacy industrial
+      </span>
+      <span class="inline-flex items-center gap-1.5">
+        <i class="inline-block w-3 h-2 rounded-sm bg-accent" aria-hidden="true"></i>
+        Data center
+      </span>
+      <span class="inline-flex items-center gap-1.5">
+        <i class="inline-block w-3 h-2 rounded-sm border border-hair-strong ps-hatch" aria-hidden="true"></i>
+        Reported, pending verification
+      </span>
+      <span class="inline-flex items-center gap-1.5">
+        <i class="inline-block w-3 h-2 rounded-sm border border-dashed border-ink-4" aria-hidden="true"></i>
+        No record found
+      </span>
+    </div>
+
+    <!-- GHG -->
+    <section class="flex flex-col gap-2">
+      <div class="flex items-baseline justify-between gap-2">
+        <h3 class="text-[11px] font-bold uppercase tracking-wider text-ink">Greenhouse gas emissions</h3>
+        <span class="text-[9px] font-semibold uppercase tracking-wide text-ink-4">tons CO2e / yr</span>
+      </div>
+      <div class="flex flex-col gap-1.5" role="table" aria-label="Greenhouse gas emissions by facility">
+        {
+          ghg.map(({ row, value, widthPct }) => (
+            <div class="grid grid-cols-[8rem_1fr] gap-2 items-center" role="row">
+              <div class="text-[10px] text-ink-2 text-right leading-tight" role="cell">
+                {row.facility}
+                <span class="block text-[9px] text-ink-4 font-medium">{row.location}</span>
+              </div>
+              {widthPct != null ? (
+                <div class="flex items-center gap-2 min-w-0" role="cell">
+                  <div class="relative h-5 flex-1 min-w-0 rounded-md bg-panel-3 overflow-hidden">
+                    <div
+                      class={`absolute inset-y-0 left-0 rounded-md ${row.subjectClass === "data_center" ? "ps-bar-dc" : "ps-bar-legacy"} ${row.valueState === "pending_verification" ? "ps-hatch" : ""}`}
+                      style={`width:${widthPct}%`}
+                    />
+                  </div>
+                  <span class="shrink-0 text-[9.5px] font-bold text-ink tabular-nums whitespace-nowrap">
+                    {row.valueState === "pending_verification"
+                      ? `~${numberFmt.format(value ?? 0)} ${unitOf(row)} (reported)`
+                      : `${numberFmt.format(value ?? 0)} ${unitOf(row)}`}
+                  </span>
+                </div>
+              ) : (
+                <div class="h-5 rounded-md border border-dashed border-ink-4 flex items-center px-2" role="cell">
+                  <span class="text-[9px] italic text-ink-4">{emptyReason(row)}</span>
+                </div>
+              )}
+            </div>
+          ))
+        }
+      </div>
+      <p class="text-[10px] text-ink-3 leading-snug">
+        No Minnesota data center meets the EPA's 25,000 ton/yr reporting
+        threshold that would put it on this list. Hatched bars use
+        secondary-sourced figures (Star Tribune, citing EPA GHGRP) shown at
+        approximate length to convey scale — not shown as confirmed tonnage.
+      </p>
+    </section>
+
+    <!-- TRI -->
+    <section class="flex flex-col gap-2">
+      <div class="flex items-baseline justify-between gap-2">
+        <h3 class="text-[11px] font-bold uppercase tracking-wider text-ink">Regional haze visibility-impact ranking</h3>
+        <span class="text-[9px] font-semibold uppercase tracking-wide text-ink-4">rank by visibility impact, not tonnage</span>
+      </div>
+      <ol class="flex flex-col gap-1">
+        {
+          TRI_TOP_FACILITIES.map((f) => (
+            <li class="flex items-baseline gap-2 text-[10px] text-ink-2 flex-wrap">
+              <span class="tabular-nums font-bold text-ink-4 w-4 shrink-0">{f.rank}</span>
+              <span class="font-medium text-ink">{f.facility}</span>
+              <span class="text-ink-4">— {f.sector}</span>
+              <span class="text-ink-4 tabular-nums">
+                ({numberFmt.format(f.tonnage2020.co2)} tons CO2, {numberFmt.format(f.tonnage2020.so2)} tons SO2, 2020)
+              </span>
+              {f.triId && (
+                <a
+                  href={triProfileUrl(f.triId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-0.5 text-accent hover:text-accent-hover hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 rounded"
+                >
+                  TRI profile
+                  <ExternalLink size={9} aria-hidden="true" />
+                </a>
+              )}
+            </li>
+          ))
+        }
+      </ol>
+      <p class="text-[10px] text-ink-3 leading-snug">
+        <span class="font-semibold text-ink-2">No Minnesota data center appears on this list.</span>{" "}
+        This ranks facilities by potential visibility impact on federally
+        protected wilderness and park areas (Voyageurs, the Boundary Waters,
+        and others) — not by total pollution released. A facility with
+        higher raw emissions but farther from a protected area can rank
+        below a smaller, closer one. {TRI_SOURCE.note}
+      </p>
+    </section>
+
+    <!-- MW -->
+    <section class="flex flex-col gap-2">
+      <div class="flex items-baseline justify-between gap-2">
+        <h3 class="text-[11px] font-bold uppercase tracking-wider text-ink">New generating capacity (ESA-tied)</h3>
+        <span class="text-[9px] font-semibold uppercase tracking-wide text-ink-4">MW</span>
+      </div>
+      <div class="flex flex-col gap-1.5" role="table" aria-label="New electric generating capacity by project">
+        {
+          mw.map(({ row, value, widthPct }) => (
+            <div class="grid grid-cols-[8rem_1fr] gap-2 items-center" role="row">
+              <div class="text-[10px] text-ink-2 text-right leading-tight" role="cell">
+                {row.facility}
+                <span class="block text-[9px] text-ink-4 font-medium">{row.location}</span>
+              </div>
+              {widthPct != null ? (
+                <div class="flex items-center gap-2 min-w-0" role="cell">
+                  <div class="relative h-5 flex-1 min-w-0 rounded-md bg-panel-3 overflow-hidden">
+                    <div class={`absolute inset-y-0 left-0 rounded-md ${row.subjectClass === "data_center" ? "ps-bar-dc" : "ps-bar-legacy"} ps-hatch`} style={`width:${widthPct}%`} />
+                  </div>
+                  <span class="shrink-0 text-[9.5px] font-bold text-ink tabular-nums whitespace-nowrap">
+                    up to {numberFmt.format(value ?? 0)} {unitOf(row)} (reported)
+                  </span>
+                </div>
+              ) : (
+                <div class="h-5 rounded-md border border-dashed border-ink-4 flex items-center px-2" role="cell">
+                  <span class="text-[9px] italic text-ink-4">{emptyReason(row)}</span>
+                </div>
+              )}
+            </div>
+          ))
+        }
+      </div>
+      <p class="text-[10px] text-ink-3 leading-snug">
+        This is the one axis where data centers are large — comparable to the
+        state's biggest power plants. Mostly new <span class="font-semibold text-ink-2">clean</span> generation
+        (wind, solar, battery) utilities are building to serve the load, not
+        emissions. Figures are pending confirmation directly from the PUC
+        eDocket filings — see "What this comparison can't see" below.
+      </p>
+      <p class="text-[9.5px] text-ink-4 leading-snug border-t border-hair pt-2">
+        Minnesota's grid-wide electricity emissions intensity was{" "}
+        <span class="font-semibold text-ink-3 tabular-nums">{MN_GRID_CO2_INTENSITY.lbsPerMwh} lbs CO2/MWh</span>{" "}
+        in {MN_GRID_CO2_INTENSITY.year} ({MN_GRID_CO2_INTENSITY.sourceLabel}). Shown as a state
+        fact only — it is not multiplied against either project's MW above,
+        because no confirmed steady-state operating draw exists for either
+        one yet.
+      </p>
+    </section>
+
+    <!-- Water -->
+    <section class="flex flex-col gap-2">
+      <div class="flex items-baseline justify-between gap-2">
+        <h3 class="text-[11px] font-bold uppercase tracking-wider text-ink">Water appropriation</h3>
+        <span class="text-[9px] font-semibold uppercase tracking-wide text-ink-4">gallons / day</span>
+      </div>
+      <div class="flex flex-col gap-1.5" role="table" aria-label="Water appropriation by facility">
+        {
+          water.map(({ row, value, widthPct }) => (
+            <div class="grid grid-cols-[8rem_1fr] gap-2 items-center" role="row">
+              <div class="text-[10px] text-ink-2 text-right leading-tight" role="cell">
+                {row.facility}
+                <span class="block text-[9px] text-ink-4 font-medium">{row.location}</span>
+              </div>
+              {widthPct != null ? (
+                <div class="flex items-center gap-2 min-w-0" role="cell">
+                  <div class="relative h-5 flex-1 min-w-0 rounded-md bg-panel-3 overflow-hidden">
+                    <div class={`absolute inset-y-0 left-0 rounded-md ${row.subjectClass === "data_center" ? "ps-bar-dc" : "ps-bar-legacy"} ps-hatch`} style={`width:${widthPct}%`} />
+                  </div>
+                  <span class="shrink-0 text-[9.5px] font-bold text-ink tabular-nums whitespace-nowrap">
+                    ~{numberFmt.format(value ?? 0)} {unitOf(row)} (reported)
+                  </span>
+                </div>
+              ) : (
+                <div class="h-5 rounded-md border border-dashed border-ink-4 flex items-center px-2" role="cell">
+                  <span class="text-[9px] italic text-ink-4">{emptyReason(row)}</span>
+                </div>
+              )}
+            </div>
+          ))
+        }
+      </div>
+      {
+        findingsFor(WATER_ROWS).map((row) => (
+          row.valueState === "no_record_found" && (
+            <p class="text-[10px] text-ink-3 leading-snug stat-well rounded-md p-2.5">
+              <span class="font-semibold text-ink-2">No record found.</span> A search of {row.registryName} on {row.searchDate}{" "}
+              returned no water appropriation permit held by any named
+              Minnesota data center. {row.explanation}
+            </p>
+          )
+        ))
+      }
+    </section>
+
+    <!-- Air permits -->
+    <section class="flex flex-col gap-2">
+      <div class="flex items-baseline justify-between gap-2">
+        <h3 class="text-[11px] font-bold uppercase tracking-wider text-ink">Air permits — backup generators</h3>
+        <span class="text-[9px] font-semibold uppercase tracking-wide text-ink-4">issued vs. proposed</span>
+      </div>
+      {
+        AIR_PERMIT_ROWS.map((row) => (
+          <div class="stat-well rounded-md p-2.5 flex items-start gap-2">
+            <Factory size={13} class="text-ink-3 shrink-0 mt-0.5" aria-hidden="true" />
+            <p class="text-[10px] text-ink-2 leading-snug">
+              <span class="font-semibold text-ink">{row.facility}</span>
+              {row.valueState === "published" && (
+                <>
+                  {" "}proposed <span class="tabular-nums font-semibold">{numberFmt.format(row.value)}</span>{" "}
+                  {row.unit}.{" "}
+                </>
+              )}
+              {" "}{row.plainLanguage}
+            </p>
+          </div>
+        ))
+      }
+    </section>
+
+    <!-- Known gaps -->
+    <details class="group border-t border-hair pt-2">
+      <summary
+        class="flex items-center justify-between gap-2 cursor-pointer list-none text-[10px] font-bold text-ink-3 hover:text-ink uppercase tracking-wider focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 rounded"
+      >
+        What this comparison can't see ({KNOWN_GAPS.length})
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden="true"
+          class="text-ink-4 shrink-0 transition-transform duration-200 group-open:rotate-180"
+        >
+          <path
+            d="M6 9l6 6 6-6"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"></path>
+        </svg>
+      </summary>
+      <ul class="flex flex-col gap-2 pt-2.5 text-[10px] text-ink-3 leading-snug">
+        {
+          KNOWN_GAPS.map((gap) => (
+            <li>
+              <span class="font-semibold text-ink-2">{gap.summary}.</span> {gap.detail}
+            </li>
+          ))
+        }
+      </ul>
+    </details>
+
+    <p class="text-[10px] text-ink-4 leading-snug border-t border-hair pt-2">
+      Every figure above links to its primary document in the full research
+      record. Last reviewed {LAST_REVIEWED}. Corrections welcome — this is a
+      public record, not an estimate.
+    </p>
+  </div>
+</dialog>
+
+<style>
+  :root {
+    --ps-legacy: #9a4a2e;
+  }
+  .dark {
+    --ps-legacy: #d97757;
+  }
+
+  .ps-bar-legacy {
+    background: var(--ps-legacy);
+  }
+  .ps-bar-dc {
+    background: var(--accent);
+  }
+  .ps-hatch {
+    background-image: repeating-linear-gradient(
+      135deg,
+      rgba(0, 0, 0, 0.22) 0 1px,
+      transparent 1px 5px
+    );
+  }
+  .dark .ps-hatch {
+    background-image: repeating-linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.28) 0 1px,
+      transparent 1px 5px
+    );
+  }
+</style>
+
+<script>
+  import { onReady } from "~/lib/domReady";
+  import { OPEN_POLLUTION_SCALE_EVENT } from "~/lib/pollutionScaleClient";
+
+  let trackerCleanups: (() => void)[] = [];
+
+  function initPollutionScaleDialog(): void {
+    const dialog = document.getElementById("ps-dialog") as HTMLDialogElement | null;
+    if (!dialog) return;
+
+    while (trackerCleanups.length > 0) {
+      trackerCleanups.pop()?.();
+    }
+
+    const onOpen = () => {
+      if (!dialog.open) dialog.showModal();
+    };
+    document.addEventListener(OPEN_POLLUTION_SCALE_EVENT, onOpen);
+    trackerCleanups.push(() =>
+      document.removeEventListener(OPEN_POLLUTION_SCALE_EVENT, onOpen),
+    );
+
+    const closeBtn = document.getElementById("ps-dialog-close");
+    const onCloseClick = () => dialog.close();
+    closeBtn?.addEventListener("click", onCloseClick);
+    trackerCleanups.push(() =>
+      closeBtn?.removeEventListener("click", onCloseClick),
+    );
+
+    // Click-outside-to-close — the ::backdrop registers as a click on the
+    // dialog element itself, so compare against the content box, same test
+    // CleanGridTracker's modal uses.
+    const onDialogClick = (event: MouseEvent) => {
+      const box = dialog.getBoundingClientRect();
+      const outside =
+        event.clientX < box.left ||
+        event.clientX > box.right ||
+        event.clientY < box.top ||
+        event.clientY > box.bottom;
+      if (outside) dialog.close();
+    };
+    dialog.addEventListener("click", onDialogClick);
+    trackerCleanups.push(() =>
+      dialog.removeEventListener("click", onDialogClick),
+    );
+  }
+
+  onReady(initPollutionScaleDialog);
+</script>

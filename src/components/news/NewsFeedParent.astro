@@ -451,12 +451,17 @@ const RANGE_OPTIONS = [
   } from "~/lib/newsFeed";
   import { readStoredFlag, writeStoredFlag } from "~/lib/storage";
   import { onSheetChange, type SheetId } from "~/lib/mobileSheet";
+  import { FACILITY_MARKER_SELECT_EVENT } from "~/lib/facilityMarkers";
 
   const STORAGE_KEY = "newsFeedCollapsed";
   const DESKTOP_MEDIA_QUERY = "(min-width: 768px)";
   const DAY_MS = 24 * 60 * 60 * 1000;
 
   let isMarkerSelected = false;
+  /** Desktop only: does a selected pollution-facility pin have
+   *  FacilityDetailParent.astro's panel open? Same right edge, same width,
+   *  so it slides this rail aside the same way a selected project does. */
+  let isFacilitySelected = false;
   /** Desktop only: the pull-tab's persisted state. */
   let isNewsCollapsed = false;
   /** Phone only: which sheet the toolbar says is open. */
@@ -905,6 +910,7 @@ const RANGE_OPTIONS = [
     desktopMql = window.matchMedia(DESKTOP_MEDIA_QUERY);
 
     isMarkerSelected = false;
+    isFacilitySelected = false;
     isNewsCollapsed = readStoredFlag(STORAGE_KEY);
     openSheet = null;
 
@@ -954,14 +960,14 @@ const RANGE_OPTIONS = [
 
       // Either surface holds the right edge at the same width — see
       // `publishControlEdge`.
-      publishControlEdge(isMarkerSelected || !isNewsCollapsed);
+      publishControlEdge(isMarkerSelected || isFacilitySelected || !isNewsCollapsed);
 
       // Desktop owns its own visibility again; anything the phone layout put
       // on this element has to come back off, or the rail stays gone at a
       // width where nothing can bring it back.
       root!.classList.remove("hidden");
 
-      if (isMarkerSelected) {
+      if (isMarkerSelected || isFacilitySelected) {
         root!.classList.add("translate-x-full");
         root!.classList.remove("translate-x-0");
         toggleBtn?.classList.add("hidden");
@@ -1003,6 +1009,18 @@ const RANGE_OPTIONS = [
     document.addEventListener("mapmarkerselect", onMarkerSelect);
     newsCleanups.push(() =>
       document.removeEventListener("mapmarkerselect", onMarkerSelect),
+    );
+
+    const onFacilityMarkerSelect = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{ facility: unknown } | null>
+      ).detail;
+      isFacilitySelected = !!detail?.facility;
+      updatePanelDOM();
+    };
+    document.addEventListener(FACILITY_MARKER_SELECT_EVENT, onFacilityMarkerSelect);
+    newsCleanups.push(() =>
+      document.removeEventListener(FACILITY_MARKER_SELECT_EVENT, onFacilityMarkerSelect),
     );
 
     newsCleanups.push(

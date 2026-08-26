@@ -53,7 +53,7 @@ import type { CompanionLayerSpec } from '~/lib/overlayLayers';
 // in the moratorium registry is meant to be markup — unlike a project's
 // `businessImpact`, which is authored as HTML — so a stray angle bracket in an
 // ordinance summary should render as one.
-import { escapeHtml, popupBlock } from '~/lib/popupHtml';
+import { escapeHtml, popupBlock, chipHtml } from '~/lib/popupHtml';
 import {
   MORATORIUM_ISSUE_URL,
   POSTURE_BY_ID,
@@ -164,15 +164,12 @@ export const MORATORIUM_TINT: CompanionLayerSpec = {
 };
 
 /** The posture pill both popups open with. */
+// Now a thin call into popupHtml.ts's shared `chipHtml` — this used to build
+// the identical markup by hand; see that function's doc comment. Found in
+// review, alongside the same duplication in facilityMarkers.ts's `badgeHtml`.
 const postureChip = (posture: MoratoriumPosture): string => {
   const meta = POSTURE_BY_ID[posture];
-  return `
-    <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider"
-          style="background-color: ${meta.hex}1f; color: ${meta.hex}">
-      <span class="inline-block w-1.5 h-1.5 rounded-full" style="background-color: ${meta.hex}"></span>
-      ${escapeHtml(meta.label)}
-    </span>
-  `;
+  return chipHtml(meta.hex, meta.label);
 };
 
 /** Hover: what it is and that there is more. Popups sit on white — see global.css. */

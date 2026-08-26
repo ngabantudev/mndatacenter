@@ -136,6 +136,7 @@ const TABS = [
     type SheetChangeDetail,
     type SheetId,
   } from "~/lib/mobileSheet";
+  import { FACILITY_MARKER_SELECT_EVENT } from "~/lib/facilityMarkers";
 
   /** Gap between the toolbar and MapLibre's control stack above it. */
   const CONTROLS_GAP = 12;
@@ -194,6 +195,13 @@ const TABS = [
       if (next !== null) {
         document.dispatchEvent(
           new CustomEvent("mapmarkerselect", { detail: null }),
+        );
+        // Same slot, same rule: the pollution-facility panel (opened by
+        // tapping a facility pin, not a tab — see FacilityDetailParent.astro)
+        // is the other surface that can occupy this space, so a tab taking
+        // the slot has to close it too.
+        document.dispatchEvent(
+          new CustomEvent(FACILITY_MARKER_SELECT_EVENT, { detail: null }),
         );
       }
     }
@@ -255,6 +263,20 @@ const TABS = [
     document.addEventListener("mapmarkerselect", onMarkerSelect);
     toolbarCleanups.push(() =>
       document.removeEventListener("mapmarkerselect", onMarkerSelect),
+    );
+
+    // Same rule, for a pollution-facility pin selection — see
+    // FacilityDetailParent.astro. That panel occupies the identical slot.
+    const onFacilityMarkerSelect = (event: Event) => {
+      const detail = (event as CustomEvent<{ facility: unknown } | null>).detail;
+      if (detail?.facility && activeSheet !== null) {
+        activeSheet = null;
+        publish();
+      }
+    };
+    document.addEventListener(FACILITY_MARKER_SELECT_EVENT, onFacilityMarkerSelect);
+    toolbarCleanups.push(() =>
+      document.removeEventListener(FACILITY_MARKER_SELECT_EVENT, onFacilityMarkerSelect),
     );
 
     /**

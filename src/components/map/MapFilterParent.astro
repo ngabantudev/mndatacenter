@@ -12,11 +12,13 @@ import { countBy } from "~/lib/collections";
 import { parseMW, projectMW } from "~/lib/projectMetrics";
 import FilterHeader from "~/components/filter/FilterHeader.astro";
 import FilterLayer from "~/components/filter/FilterLayer.astro";
+import FilterFacilities from "~/components/filter/FilterFacilities.astro";
 import FilterMoratorium from "~/components/filter/FilterMoratorium.astro";
 import FilterStatus from "~/components/filter/FilterStatus.astro";
 import FilterProject from "~/components/filter/FilterProject.astro";
 import FilterLegal from "~/components/filter/FilterLegal.astro";
 import FilterSize from "~/components/filter/FilterSize.astro";
+import PollutionScaleTrigger from "~/components/scale/PollutionScaleTrigger.astro";
 import { SlidersHorizontal } from "lucide-astro";
 
 // Takes no props: it read the whole dataset from `clientProjects` even when it
@@ -135,18 +137,32 @@ const lastUpdated = new Date().toLocaleDateString("en-US", {
 
     <FilterLayer group="climate" />
 
-    <!-- What a site would sit on top of, and then who decides whether it does.
-         The moratorium layer rides in the Politics section's slot: it is the
-         same question the city boundaries raise ("whose council?") with the
-         answer that council has already given. -->
+    <!-- What a site would sit on top of, and then who decides whether it does,
+         and then who else nearby is already a documented pollution source —
+         three different questions, three groups. The moratorium layer rides
+         in the Politics section's slot: it is the same question the city
+         boundaries raise ("whose council?") with the answer that council has
+         already given. -->
     <FilterLayer group="politics">
       <FilterMoratorium />
+    </FilterLayer>
+
+    <!-- Legacy pollution sources — a hand-sourced registry, not a PMTiles
+         archive, so it rides in this group's own slot the same way
+         FilterMoratorium.astro rides in Politics' above. Its own top-level
+         group, not folded into Climate & Regional Impacts: comparison
+         context ("who else pollutes, for scale"), not a thing a data center
+         site sits on top of. See research/facility-pins-spec.md §2.6 for the
+         original placement and this file's own history for why it moved. -->
+    <FilterLayer group="pollution">
+      <FilterFacilities />
     </FilterLayer>
 
     <FilterProject largestProjects={largestProjects} />
   </div>
 
-  <div class="shrink-0 px-3.5 py-2 border-t border-hair text-center">
+  <div class="shrink-0 px-3.5 py-2 border-t border-hair flex flex-col gap-1.5 items-center">
+    <PollutionScaleTrigger />
     <span class="text-[10px] text-ink-4">Last updated: {lastUpdated}</span>
   </div>
 
