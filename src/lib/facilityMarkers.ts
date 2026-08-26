@@ -431,7 +431,9 @@ const ICON_SIZE_MAX = 2.25;
  *  quantity now, not derived from a separately-tuned radius. THE icon is
  *  the pin (there's no colored circle behind it to fall back on), so unlike
  *  the size expression this replaced, it must never reach 0: every facility
- *  stays visible and tappable regardless of its Q/D rank. */
+ *  stays visible and tappable regardless of its Q/D rank. This is the
+ *  UNZOOMED size — see `FACILITY_ICON_SIZE_EXPR` below for why the exported
+ *  version isn't this expression directly. */
 const qdIconSizeExpr: unknown[] = [
   'interpolate',
   ['linear'],
@@ -442,12 +444,72 @@ const qdIconSizeExpr: unknown[] = [
   ICON_SIZE_MAX,
 ];
 
-export const FACILITY_ICON_SIZE_EXPR: unknown[] = [
+const facilityIconBaseSizeExpr: unknown[] = [
   'case',
   ['==', ['get', 'hasQD'], true],
   qdIconSizeExpr,
   ICON_SIZE_FALLBACK,
 ];
+
+/** Several facilities sit only a few miles apart in real life — multiple
+ *  taconite plants on the Iron Range, several sites clustered south of the
+ *  Twin Cities — and a pin is drawn at a fixed screen size regardless of
+ *  zoom. At the statewide default view those real-world neighbors land only
+ *  a few screen pixels apart, so full-size icons and their rings visibly
+ *  overlap and stack (found via a live screenshot at the site's own default
+ *  zoom, `DESKTOP_ZOOM`/`MOBILE_ZOOM` in MapParent.astro — this is not a
+ *  guess, it was seen happening). Shrinking pins at low zoom and growing
+ *  them back to full size once a reader has zoomed into a specific cluster
+ *  is standard map practice for exactly this. `icon-allow-overlap`/
+ *  `icon-ignore-placement` stay `true` (every facility must stay visible,
+ *  per this file's own rule above) — this fixes the collision by making the
+ *  colliding shapes smaller, not by hiding any of them. */
+// MapLibre restricts where a `['zoom']` expression may legally appear: only
+// as the direct input to a top-level `interpolate`/`step`, not buried inside
+// arbitrary arithmetic like `['+', ..., ['interpolate', ['zoom'], ...]]` —
+// that shape fails style validation. The valid way to combine a zoom-based
+// scale with a data-driven expression is the other way around: make the
+// OUTER expression the zoom interpolation, and give each zoom stop a
+// data-driven (non-zoom) expression as its output value — the restriction
+// is on where `['zoom']` itself sits, not on what a stop's output can be.
+// Both `FACILITY_ICON_SIZE_EXPR` and `FACILITY_RADIUS_EXPR` need this same
+// shape (the radius derives from the size, so it inherits the same zoom
+// dependency), so the shared zoom stops live in one place — `zoomIconScale`
+// — rather than getting hand-duplicated and risking drifting apart.
+const ZOOM_SHRINK_STOP = 6;
+const ZOOM_SHRINK_SCALE = 0.4;
+const ZOOM_FULL_SIZE_STOP = 10;
+
+/** `expr` at full (unzoomed) scale, wrapped in the shared zoom interpolation
+ *  — `expr` itself must be a plain data-driven expression with no `['zoom']`
+ *  inside it, or this produces the same invalid nested-zoom shape the
+ *  comment above warns against. */
+function zoomScaled(expr: unknown): unknown[] {
+  return [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    ZOOM_SHRINK_STOP,
+    ['*', expr, ZOOM_SHRINK_SCALE],
+    ZOOM_FULL_SIZE_STOP,
+    expr,
+  ];
+}
+
+/** Several facilities sit only a few miles apart in real life — multiple
+ *  taconite plants on the Iron Range, several sites clustered south of the
+ *  Twin Cities — and a pin is drawn at a fixed screen size regardless of
+ *  zoom. At the statewide default view those real-world neighbors land only
+ *  a few screen pixels apart, so full-size icons and their rings visibly
+ *  overlap and stack (found via a live screenshot at the site's own default
+ *  zoom, `DESKTOP_ZOOM`/`MOBILE_ZOOM` in MapParent.astro — this is not a
+ *  guess, it was seen happening). Shrinking pins at low zoom and growing
+ *  them back to full size once a reader has zoomed into a specific cluster
+ *  is standard map practice for exactly this. `icon-allow-overlap`/
+ *  `icon-ignore-placement` stay `true` (every facility must stay visible,
+ *  per this file's own rule above) — this fixes the collision by making the
+ *  colliding shapes smaller, not by hiding any of them. */
+export const FACILITY_ICON_SIZE_EXPR: unknown[] = zoomScaled(facilityIconBaseSizeExpr);
 
 /** Icon-halo width/color — this is the icon layer's replacement for the old
  *  circle layer's white `circle-stroke`: a fixed-width light outline so a
@@ -464,23 +526,32 @@ export const FACILITY_ICON_HALO_COLOR = '#ffffff';
  *  the icon's own footprint, no larger. */
 const FACILITY_RING_PADDING_PX = 0;
 
+/** `expr`'s rendered pixel radius (half its `ICON_CANVAS_PX`-relative
+ *  width) plus the ring padding — a plain, non-zoom data expression, built
+ *  from `facilityIconBaseSizeExpr` (also non-zoom) so it's safe to pass to
+ *  `zoomScaled()` below without re-nesting a zoom expression inside it. */
+function ringRadiusFor(iconSizeExpr: unknown): unknown[] {
+  return ['+', ['*', ICON_CANVAS_PX / 2, iconSizeExpr], FACILITY_RING_PADDING_PX];
+}
+
 /** The ring around each icon (this layer's `circle-stroke-*` paint, set in
  *  MapParent.astro) AND the hit-test target's radius — both driven by this
  *  one expression, which is now derived directly FROM the icon's own
- *  rendered size (`FACILITY_ICON_SIZE_EXPR`) rather than an independently
- *  tuned number. Per direct request ("the rings should be dynamic to the
- *  size of the icons"): this used to be the other way around — icon size
- *  was computed from this radius, using its own separate output range —
- *  which meant every icon-size change (four rounds of direct feedback in a
- *  row) required hand-updating this radius to match too, or the ring/hit
- *  circle silently drifted out of sync with what the icon actually looked
- *  like. Now it can't drift, by construction: half the icon's rendered
- *  pixel width, plus a fixed padding. */
-export const FACILITY_RADIUS_EXPR: unknown[] = [
-  '+',
-  ['*', ICON_CANVAS_PX / 2, FACILITY_ICON_SIZE_EXPR],
-  FACILITY_RING_PADDING_PX,
-];
+ *  rendered size rather than an independently tuned number. Per direct
+ *  request ("the rings should be dynamic to the size of the icons"): this
+ *  used to be the other way around — icon size was computed from this
+ *  radius, using its own separate output range — which meant every
+ *  icon-size change (four rounds of direct feedback in a row) required
+ *  hand-updating this radius to match too, or the ring/hit circle silently
+ *  drifted out of sync with what the icon actually looked like. Now it
+ *  can't drift, by construction — including through the zoom-based
+ *  shrinking above, since this shares the exact same zoom stops via
+ *  `zoomScaled()` rather than being computed from the already-zoom-scaled
+ *  `FACILITY_ICON_SIZE_EXPR` (which would re-nest a zoom expression and
+ *  fail validation — see the comment above `zoomScaled`). */
+export const FACILITY_RADIUS_EXPR: unknown[] = zoomScaled(
+  ringRadiusFor(facilityIconBaseSizeExpr),
+);
 
 // ---------------------------------------------------------------------------
 // The GeoJSON source. Built once at module scope — this registry is fixed for
