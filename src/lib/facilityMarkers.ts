@@ -446,20 +446,23 @@ export const FACILITY_ICON_EXPR: unknown[] = [
  *  old circle radius used (`FACILITY_RADIUS_EXPR` already resolves the
  *  hasQD/fallback split), remapped to a render-size floor/ceiling picked so
  *  even the smallest, bold, one-or-two-shape glyphs this file draws stay
- *  legible: ~40px across at the low end, ~90px at the high end
- *  (ICON_CANVAS_PX=24 × icon-size) — two size bumps now on direct request
- *  ("noticeably larger", then "much bigger, bolder"), roughly 2.7x the
- *  original ~15–34px pass. */
+ *  legible: ~24px across at the low end, ~54px at the high end
+ *  (ICON_CANVAS_PX=24 × icon-size). Went through three sizes on direct
+ *  feedback — an initial pass, "noticeably larger," then "much bigger,
+ *  bolder" (~40–90px), then back down one step to here ("way too big") —
+ *  settled at the middle size; the bolder stroke weights and halo width
+ *  from the "much bigger" pass were kept since only the size, not the
+ *  boldness, was called out as wrong. */
 export const FACILITY_ICON_SIZE_EXPR: unknown[] = [
   'interpolate',
   ['linear'],
   FACILITY_RADIUS_EXPR,
   FACILITY_FALLBACK_R,
-  1.67,
+  1.0,
   FACILITY_MIN_R,
-  1.85,
+  1.12,
   FACILITY_MAX_R,
-  3.75,
+  2.25,
 ];
 
 /** Icon-halo width/color — this is the icon layer's replacement for the old
