@@ -34,7 +34,7 @@
 // list below the sector checkboxes, and MapParent.astro's
 // `FACILITY_LIST_SELECT_EVENT` listener for how activating an entry there
 // opens the same record a pointer click on the pin does.
-import { ChevronRight, Factory } from "lucide-astro";
+import { ChevronRight, Factory, Mountain, Pickaxe, Flame, TreePine, Fuel, Wheat, Zap } from "lucide-astro";
 import { POLLUTION_FACILITIES } from "~/data/mnPollutionFacilities";
 import {
   FACILITY_API_KEY,
@@ -46,6 +46,25 @@ const facilitiesBySector = new Map<string, number>();
 for (const facility of POLLUTION_FACILITIES) {
   facilitiesBySector.set(facility.sector, (facilitiesBySector.get(facility.sector) ?? 0) + 1);
 }
+
+// Per-sector icons, kept here rather than in facilityMarkers.ts, for the
+// same reason FilterLayer.astro's own SWATCHES table gives: lucide-astro
+// exports Astro components, and importing those into a plain .ts data
+// module is the wrong direction. Color alone (the dot next to each row, and
+// the pin color on the map) isn't enough to tell two sectors apart for a
+// colorblind reader or in a black-and-white printout/screenshot — this is
+// the second, non-color channel for the same distinction.
+const SECTOR_ICONS: Record<string, typeof Factory> = {
+  "Taconite mining/processing": Mountain,
+  "Taconite processing": Factory,
+  "Taconite mining": Pickaxe,
+  "Coal power generation": Flame,
+  "Pulp/paper": TreePine,
+  "Petroleum refining": Fuel,
+  "Sugar mill": Wheat,
+  "Electricity generation via combustion": Zap,
+};
+const FALLBACK_SECTOR_ICON = Factory;
 
 const sortedFacilities = [...POLLUTION_FACILITIES].sort((a, b) => a.name.localeCompare(b.name));
 ---
@@ -83,30 +102,36 @@ const sortedFacilities = [...POLLUTION_FACILITIES].sort((a, b) => a.name.localeC
   <div class="hidden mt-1 pl-9" id="mf-facility-sectors">
     <ul class="flex flex-col gap-1">
       {
-        FACILITY_SECTOR_SWATCHES.map(({ sector, swatch }) => (
-          <li>
-            <label class="flex items-center gap-2 cursor-pointer group rounded-md px-1.5 py-1 transition-colors hover:bg-hover">
-              <input
-                type="checkbox"
-                checked
-                value={sector}
-                class="facility-sector-checkbox w-3 h-3 rounded border-hair-strong bg-panel-2 cursor-pointer"
-                style={`accent-color: ${swatch.light}`}
-              />
-              <span
-                class="shrink-0 w-2 h-2 rounded-full"
-                style={`background-color: ${swatch.light}`}
-                aria-hidden="true"
-              />
-              <span class="min-w-0 flex-1 text-[10.5px] font-medium text-ink-2 group-hover:text-ink transition-colors">
-                {sector}
-              </span>
-              <span class="text-[9.5px] font-bold text-ink-4 tabular-nums">
-                {facilitiesBySector.get(sector) ?? 0}
-              </span>
-            </label>
-          </li>
-        ))
+        FACILITY_SECTOR_SWATCHES.map(({ sector, swatch }) => {
+          const SectorIcon = SECTOR_ICONS[sector] ?? FALLBACK_SECTOR_ICON;
+          return (
+            <li>
+              <label class="flex items-center gap-2 cursor-pointer group rounded-md px-1.5 py-1 transition-colors hover:bg-hover">
+                <input
+                  type="checkbox"
+                  checked
+                  value={sector}
+                  class="facility-sector-checkbox w-3 h-3 rounded border-hair-strong bg-panel-2 cursor-pointer"
+                  style={`accent-color: ${swatch.light}`}
+                />
+                <span
+                  class="shrink-0 w-2 h-2 rounded-full"
+                  style={`background-color: ${swatch.light}`}
+                  aria-hidden="true"
+                />
+                <span class="shrink-0" style={`color: ${swatch.light}`} aria-hidden="true">
+                  <SectorIcon size={12} stroke-width={2} />
+                </span>
+                <span class="min-w-0 flex-1 text-[10.5px] font-medium text-ink-2 group-hover:text-ink transition-colors">
+                  {sector}
+                </span>
+                <span class="text-[9.5px] font-bold text-ink-4 tabular-nums">
+                  {facilitiesBySector.get(sector) ?? 0}
+                </span>
+              </label>
+            </li>
+          );
+        })
       }
     </ul>
 
