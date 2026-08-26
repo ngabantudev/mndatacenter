@@ -239,18 +239,20 @@ export function facilityById(facilityId: string): PollutionFacility | null {
 // mnPollutionScale.ts's own doc comments, not invented here.
 // ---------------------------------------------------------------------------
 
+// Plain-language labels, per CLAUDE.md §0.9 — every technical term gets its
+// gloss rendered inline, not left as jargon a reader has to already know.
 const TIER_LABEL: Record<Tier, string> = {
-  1: 'Tier 1 — MN state record',
-  2: 'Tier 2 — federal record',
-  3: 'Tier 3 — operator-submitted',
-  4: 'Tier 4 — aggregator lead',
+  1: 'From a Minnesota state record',
+  2: 'From a federal government record',
+  3: 'Self-reported by the company',
+  4: 'From a lead, not yet checked',
 };
 
 const CONFIDENCE_LABEL: Record<Confidence, string> = {
-  confirmed: 'Confirmed',
-  corroborated: 'Corroborated',
-  reported: 'Reported',
-  lead: 'Lead (unresolved)',
+  confirmed: 'Confirmed by an official document',
+  corroborated: 'Backed by two independent sources',
+  reported: 'Reported, not yet double-checked',
+  lead: 'Unconfirmed lead',
 };
 
 const CONFIDENCE_HEX: Record<Confidence, string> = {
@@ -279,17 +281,17 @@ function badgeHtml(tier: Tier, confidence: Confidence): string {
 function rowValueHtml(row: PollutionRow, numberFmt: Intl.NumberFormat): string {
   switch (row.valueState) {
     case 'published':
-      return `<p class="text-[11px] font-bold text-neutral-900">${numberFmt.format(row.value)} ${escapeHtml(row.unit)} <span class="font-normal text-neutral-400">(${row.year})</span></p>`;
+      return `<p class="text-[11px] font-bold text-neutral-900">${numberFmt.format(row.value)} ${escapeHtml(row.unit)} <span class="font-normal text-neutral-400">(in ${row.year})</span></p>`;
     case 'pending_verification':
       return row.approxValue != null
-        ? `<p class="text-[11px] font-bold text-neutral-900">~${numberFmt.format(row.approxValue)} ${escapeHtml(row.approxUnit ?? '')} <span class="font-normal text-neutral-400">(reported, pending verification)</span></p>`
-        : `<p class="text-[11px] italic text-neutral-500">Figure pending — needs a direct primary-source pull.</p>`;
+        ? `<p class="text-[11px] font-bold text-neutral-900">About ${numberFmt.format(row.approxValue)} ${escapeHtml(row.approxUnit ?? '')} <span class="font-normal text-neutral-400">(a rough figure — the exact number still needs to be checked against the original document)</span></p>`
+        : `<p class="text-[11px] italic text-neutral-500">No number yet — someone still needs to pull this figure from the original document.</p>`;
     case 'no_record_found':
-      return `<p class="text-[11px] italic text-neutral-500">No record found in ${escapeHtml(row.registryName)} (searched ${escapeHtml(row.searchDate)}).</p>`;
+      return `<p class="text-[11px] italic text-neutral-500">Nothing was found in ${escapeHtml(row.registryName)} (checked on ${escapeHtml(row.searchDate)}). That could mean it doesn't apply here, or that the paperwork just hasn't been filed yet.</p>`;
     case 'not_applicable':
-      return `<p class="text-[11px] italic text-neutral-500">Not applicable — different regulatory category.</p>`;
+      return `<p class="text-[11px] italic text-neutral-500">This doesn't apply to this facility, for a different reason than "no pollution" — see the note below.</p>`;
     case 'redacted':
-      return `<p class="text-[11px] italic text-neutral-500">Withheld as trade secret (${escapeHtml(row.claimedBasis)}).</p>`;
+      return `<p class="text-[11px] italic text-neutral-500">The company was allowed to keep this number secret, citing "${escapeHtml(row.claimedBasis)}" as a business secret.</p>`;
     default:
       return '';
   }
@@ -339,18 +341,26 @@ function visibilitySectionHtml(facilityId: string): string {
     : '';
 
   return popupBlock(
-    'Regional-haze visibility ranking',
+    'How much this facility could dirty the air over nearby wild places',
     `
       ${badgeHtml(TRI_SOURCE.tier, TRI_SOURCE.confidence)}
-      <p class="text-[11px] font-bold text-neutral-900">Rank ${row.rank} of 16 — cumulative Q/D ${row.cumulativeQD.toFixed(2)}</p>
+      <p class="text-[11px] font-bold text-neutral-900">Ranked #${row.rank} out of the 16 Minnesota facilities on this list</p>
       <p class="mt-1 text-[10.5px] text-neutral-600 leading-snug">
-        Not a pollution-volume figure — a screening score for potential visibility impact on
-        federally protected Class I areas (SO2 + NOx + PM10 weighted by distance). See
-        ${escapeHtml(row.tonnage2020.co2 ? `${numberFmt.format(row.tonnage2020.co2)} tons CO2 (2020)` : '')} for a raw tonnage figure instead.
+        The federal government scores facilities on how much their smoke and exhaust could
+        hazes up the view in protected wilderness areas and national parks nearby — like the
+        Boundary Waters or Voyageurs National Park. The score weighs both how much a facility
+        pollutes <em>and</em> how close it is to one of those protected places. It is
+        <strong>not</strong> a simple "who pollutes the most" ranking — a smaller polluter
+        right next to a park can outrank a bigger one far away.
+        ${
+          row.tonnage2020.co2
+            ? `For a plainer number: this facility released about ${numberFmt.format(row.tonnage2020.co2)} tons of carbon dioxide in 2020.`
+            : ''
+        }
       </p>
       <a href="${escapeHtml(TRI_SOURCE.url)}" target="_blank" rel="noopener noreferrer"
          class="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 hover:underline">
-        EPA Region 5 regional-haze Q/D table &rarr;
+        See the original EPA document &rarr;
       </a>
       ${triLink}
     `,
@@ -367,15 +377,16 @@ export function buildFacilityDetailHtml(facility: PollutionFacility): string {
   const hasVisibility = TRI_TOP_FACILITIES.some((r) => r.facilityId === facility.facilityId);
 
   const sections = [
-    ghgRow ? metricSectionHtml('Greenhouse gas emissions', 'tons CO2e/yr', ghgRow) : '',
+    ghgRow ? metricSectionHtml('Climate-warming gases released', 'tons per year', ghgRow) : '',
     hasVisibility ? visibilitySectionHtml(facility.facilityId) : '',
-    waterRow ? metricSectionHtml('Water appropriation', 'gallons/day', waterRow) : '',
+    waterRow ? metricSectionHtml('Water taken from rivers, lakes, or wells', 'gallons per day', waterRow) : '',
   ].filter(Boolean);
 
   const noneFound = sections.length === 0
     ? `<p class="mt-2 pt-2 border-t border-neutral-100 text-[11px] italic text-neutral-500 leading-snug">
-         No GHG, visibility-ranking, or water-appropriation row in
-         <code class="text-[10px]">mnPollutionScale.ts</code> currently references this facility.
+         This project hasn't yet found a sourced record of this facility's climate,
+         air-pollution ranking, or water use — it's on this map because it's one of
+         Minnesota's largest documented pollution sources by another measure.
        </p>`
     : '';
 
@@ -419,10 +430,10 @@ export function buildFacilityHoverHtml(facility: PollutionFacility): string {
       <p class="text-[10px] text-neutral-400 font-medium">${escapeHtml(facility.county)} County</p>
       ${
         qd != null
-          ? `<p class="mt-1 text-[10px] text-neutral-600 leading-snug">Regional-haze visibility ranking: cumulative Q/D ${qd.toFixed(2)}.</p>`
-          : `<p class="mt-1 text-[10px] text-neutral-500 leading-snug">Not on the regional-haze visibility ranking.</p>`
+          ? `<p class="mt-1 text-[10px] text-neutral-600 leading-snug">Ranked #${TRI_TOP_FACILITIES.find((r) => r.facilityId === facility.facilityId)?.rank ?? '?'} of 16 for how much it could dirty the air over nearby parks and wilderness.</p>`
+          : `<p class="mt-1 text-[10px] text-neutral-500 leading-snug">Not on the state's list of biggest air-visibility impacts.</p>`
       }
-      <p class="mt-1 text-[9px] font-semibold text-blue-600 uppercase tracking-wide">Click for sourced metrics &rarr;</p>
+      <p class="mt-1 text-[9px] font-semibold text-blue-600 uppercase tracking-wide">Click to see the full sourced record &rarr;</p>
     </div>
   `;
 }

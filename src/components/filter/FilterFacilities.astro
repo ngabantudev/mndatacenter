@@ -62,13 +62,13 @@ const sortedFacilities = [...POLLUTION_FACILITIES].sort((a, b) => a.name.localeC
     </span>
     <span class="min-w-0 flex-1">
       <span class="block text-xs font-semibold text-ink-2 group-hover:text-ink transition-colors">
-        Facilities — Documented Pollution Sources
+        Facilities — Minnesota's Biggest Known Polluters
       </span>
       <span class="block text-[10px] leading-snug text-ink-4 mt-0.5">
-        {POLLUTION_FACILITIES.length} legacy industrial sites — taconite mines,
-        coal plants, refineries, pulp mills, sugar mills — with real,
-        per-facility GHG, water, and visibility-impact figures. See where they
-        sit relative to data center sites.
+        {POLLUTION_FACILITIES.length} taconite mines, coal plants, oil
+        refineries, paper mills, and sugar mills — with real, sourced numbers
+        for the climate gases, water use, and air pollution each one is
+        documented to produce. See where they sit compared to data centers.
       </span>
     </span>
   </label>
@@ -112,10 +112,12 @@ const sortedFacilities = [...POLLUTION_FACILITIES].sort((a, b) => a.name.localeC
          source of truth for the palette (`FACILITY_SECTOR_SWATCHES`) draws
          both. -->
     <p class="mt-2 pt-2 border-t border-hair text-[9px] leading-snug text-ink-4">
-      Pin color = sector (above). Pin size = regional-haze visibility-impact
-      ranking (cumulative Q/D), where a facility has one — never a summed
-      pollution total. A faint, smaller pin means no ranking data, not a
-      small ranking.
+      Pin color shows the type of facility (listed above). Pin size shows how
+      much it could affect air quality in nearby parks and wilderness areas —
+      never a single "total pollution" number, since that isn't something
+      that can honestly be added up across different pollutants. A smaller,
+      faded pin means that ranking hasn't been calculated for this facility —
+      not that it ranks low.
     </p>
 
     <!-- Accessible DOM record list for facility pins — separate from
