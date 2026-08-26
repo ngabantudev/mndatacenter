@@ -519,8 +519,10 @@ function zoomScaled(expr: unknown): unknown[] {
  *  "slightly larger" request turned out to mean the icon only, not the ring
  *  around it — multiplying `facilityIconBaseSizeExpr` itself would have
  *  grown both, since the ring is deliberately derived from that same base
- *  size. This one knob is the icon-only exception to that coupling. */
-const ICON_VISUAL_BOOST = 1.15;
+ *  size. This one knob is the icon-only exception to that coupling. Bumped
+ *  again (was 1.15) on a second "slightly larger, ring unchanged" request —
+ *  same knob, no ring impact either time by construction. */
+const ICON_VISUAL_BOOST = 1.3;
 
 export const FACILITY_ICON_SIZE_EXPR: unknown[] = zoomScaled([
   '*',
