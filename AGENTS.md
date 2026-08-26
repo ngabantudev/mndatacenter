@@ -292,3 +292,16 @@ npm run build     # Production build
 ---
 
 @DURABILITY.md
+
+### Exceptions to DURABILITY.md for this repo
+
+This is a free, non-commercial civic transparency site — Pillar 3's pricing/
+monetization guidance does not apply here; there is no pricing, subscription,
+or sale of user data to reconcile.
+
+`DURABILITY.md`'s "Track time-to-first-contribution as a core metric"
+directive is superseded here by Part 2 §7 (Zero Third-Party Assets: no
+external analytics) and §0.7 (no login, no paywall, **no tracking**). Any
+newcomer-funnel metric this project wants must be derived from static build
+output (e.g. commit/PR counts), never from third-party analytics or
+in-product tracking.
