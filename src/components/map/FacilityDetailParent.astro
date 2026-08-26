@@ -124,8 +124,15 @@ import { Factory } from 'lucide-astro';
       // panel. Dispatching `mapmarkerselect: null` rather than reaching into
       // MapDetailParent.astro is the same arm's-length mechanism
       // MobileToolbar.astro already uses to close that panel from outside
-      // its own file.
-      document.dispatchEvent(new CustomEvent('mapmarkerselect', { detail: null }));
+      // its own file. Gated on that panel's own hidden state — the same
+      // check `onMarkerSelect` below already makes before calling this
+      // file's own `close()` — so a facility click doesn't pay for a
+      // document-wide event dispatch and its full listener chain on the
+      // common case where there's nothing to close. Found in review.
+      const dataCenterPanel = document.getElementById('map-detail-panel');
+      if (dataCenterPanel && !dataCenterPanel.classList.contains('hidden')) {
+        document.dispatchEvent(new CustomEvent('mapmarkerselect', { detail: null }));
+      }
       content!.innerHTML = buildFacilityDetailHtml(facility);
       if (titleEl) titleEl.textContent = facility.name;
       panel!.classList.remove('hidden');

@@ -45,8 +45,12 @@ import {
   type PollutionRow,
 } from "~/data/mnPollutionScale";
 import { ExternalLink } from "lucide-astro";
+import { nf as numberFmt } from "~/lib/ratepayerWidget";
 
-const numberFmt = new Intl.NumberFormat("en-US");
+// `numberFmt` is `~/lib/ratepayerWidget`'s shared `nf` — this file used to
+// build its own second `Intl.NumberFormat('en-US')` instance (a third one,
+// alongside facilityMarkers.ts's own now-fixed duplicate), the exact
+// per-module duplication `nf` was extracted to prevent. Found in review.
 
 /** The value used to size a bar — a published figure, or an approximate one
  * carried only for a pending row. Rows with neither render no bar at all. */
@@ -266,7 +270,7 @@ const findingsFor = (rows: PollutionRow[]) =>
               {widthPct != null ? (
                 <div class="flex items-center gap-2 min-w-0" role="cell">
                   <div class="relative h-5 flex-1 min-w-0 rounded-md bg-panel-3 overflow-hidden">
-                    <div class="absolute inset-y-0 left-0 rounded-md ps-bar-dc ps-hatch" style={`width:${widthPct}%`} />
+                    <div class={`absolute inset-y-0 left-0 rounded-md ${row.subjectClass === "data_center" ? "ps-bar-dc" : "ps-bar-legacy"} ps-hatch`} style={`width:${widthPct}%`} />
                   </div>
                   <span class="shrink-0 text-[9.5px] font-bold text-ink tabular-nums whitespace-nowrap">
                     up to {numberFmt.format(value ?? 0)} {unitOf(row)} (reported)
@@ -315,7 +319,7 @@ const findingsFor = (rows: PollutionRow[]) =>
               {widthPct != null ? (
                 <div class="flex items-center gap-2 min-w-0" role="cell">
                   <div class="relative h-5 flex-1 min-w-0 rounded-md bg-panel-3 overflow-hidden">
-                    <div class="absolute inset-y-0 left-0 rounded-md ps-bar-legacy ps-hatch" style={`width:${widthPct}%`} />
+                    <div class={`absolute inset-y-0 left-0 rounded-md ${row.subjectClass === "data_center" ? "ps-bar-dc" : "ps-bar-legacy"} ps-hatch`} style={`width:${widthPct}%`} />
                   </div>
                   <span class="shrink-0 text-[9.5px] font-bold text-ink tabular-nums whitespace-nowrap">
                     ~{numberFmt.format(value ?? 0)} {unitOf(row)} (reported)

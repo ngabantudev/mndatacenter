@@ -799,6 +799,16 @@ const news = await fetchLocalNews();
         // Inserted beneath the project layers, not on top of them: a
         // co-located facility and data center site should never have the
         // pollution pin visually cover the project marker it sits next to.
+        // This ONLY resolves correctly because the project-layer block above
+        // this one runs earlier in this same addDataLayer() call, so at
+        // least one PROJECT_LAYER_IDS entry already exists by the time this
+        // line runs. Reordering that block, or making project-layer creation
+        // conditional/lazy, would silently make `beforeProject` undefined —
+        // `map.addLayer(spec, undefined)` appends at the top instead of
+        // beneath, breaking the guarantee above with no error. Found in
+        // review; flagged rather than restructured, since the fix (making
+        // this independent of block order) is more invasive than the bug
+        // warrants today.
         const beforeProject = PROJECT_LAYER_IDS.find((id) => map.getLayer(id));
         map.addLayer(
           {
@@ -1132,12 +1142,11 @@ const news = await fetchLocalNews();
      *  rather than building a popup itself — FacilityDetailParent.astro is
      *  the sole listener that turns the payload into a rendered panel, the
      *  same separation MapDetailParent.astro keeps from the project marker's
-     *  own click handler. `coords` is accepted for parity with the
-     *  accessible-list caller's flyTo, unused by the panel itself. */
-    const openFacilityDetail = (
-      facility: ReturnType<typeof facilityForFeature>,
-      _coords: [number, number],
-    ): void => {
+     *  own click handler. No coordinate parameter: the panel doesn't need
+     *  one, and the accessible-list caller does its own `flyTo` separately
+     *  before calling this — a `coords` param here was dead plumbing. Found
+     *  in review. */
+    const openFacilityDetail = (facility: ReturnType<typeof facilityForFeature>): void => {
       if (!facility) return;
       closeFacilityHoverPopup();
       if (activePopup) activePopup.remove();
@@ -1161,10 +1170,7 @@ const news = await fetchLocalNews();
       // marker here, the same way the map's catch-all deselect handler
       // already yields to both (`isMarkerAt(e.point) || isFacilityAt(e.point)`).
       if (isMarkerAt(e.point)) return;
-      openFacilityDetail(
-        facilityForFeature(e.features[0]),
-        e.features[0].geometry.coordinates as [number, number],
-      );
+      openFacilityDetail(facilityForFeature(e.features[0]));
     });
 
     /** Is this point on a facility pin? Same shape as `isMarkerAt` above, and
@@ -1188,7 +1194,7 @@ const news = await fetchLocalNews();
         facility.coordinates[0],
       ];
       map.flyTo({ center: coords, zoom: Math.max(map.getZoom(), 10), essential: true });
-      openFacilityDetail(facility, coords);
+      openFacilityDetail(facility);
     };
     document.addEventListener(FACILITY_LIST_SELECT_EVENT, handleFacilityListSelect);
     mapCleanups.push(() =>

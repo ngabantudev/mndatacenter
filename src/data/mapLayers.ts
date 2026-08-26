@@ -321,6 +321,14 @@ export const outlineColorFor = (layer: MapLayerMeta, dark: boolean): string =>
  * order. Excludes `manualToggle` layers — folded into another control, so a
  * row here would be a second way to switch on something already reachable,
  * unchecked and silently doing nothing until its companion toggle is found.
+ *
+ * Returns `[]` for `'politics'` and `'pollution'` by design, not by
+ * omission — neither group has any `MAP_LAYER_META` entries at all; both
+ * exist purely as `FilterLayer.astro` accordions whose `<slot />` holds a
+ * hand-sourced control instead (`FilterMoratorium.astro`,
+ * `FilterFacilities.astro`). A reader expecting every declared
+ * `MapLayerGroup` to have registry-backed layers here would be wrong —
+ * check the group's slot content, not just this function. Found in review.
  */
 export const layersInGroup = (group: MapLayerGroup): MapLayerMeta[] =>
   MAP_LAYER_META.filter((layer) => layer.group === group && !layer.manualToggle);

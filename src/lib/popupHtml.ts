@@ -46,3 +46,19 @@ export const popupBlock = (title: string, body: string | null): string =>
       </div>
     `
     : '';
+
+/**
+ * A small colored status pill — a dot plus a label, tinted by one hex. This
+ * is the third primitive both `moratoriumLayer.ts`'s `postureChip` and
+ * `facilityMarkers.ts`'s `badgeHtml` independently built by hand, byte-for-
+ * byte identical down to the `1f` alpha suffix, before either called into
+ * `popupHtml.ts` for it — named here for the same reason `escapeHtml` and
+ * `popupBlock` already are. Found in review.
+ */
+export const chipHtml = (hex: string, label: string): string => `
+    <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+          style="background-color: ${hex}1f; color: ${hex}">
+      <span class="inline-block w-1.5 h-1.5 rounded-full" style="background-color: ${hex}"></span>
+      ${escapeHtml(label)}
+    </span>
+  `;

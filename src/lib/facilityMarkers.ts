@@ -50,6 +50,7 @@ import {
   type Tier,
 } from '~/data/mnPollutionScale';
 import { escapeHtml, popupBlock } from '~/lib/popupHtml';
+import { nf as numberFmt } from '~/lib/ratepayerWidget';
 
 export const FACILITY_SOURCE_ID = 'pollution-facilities';
 export const FACILITY_LAYER_ID = 'pollution-facilities-circles';
@@ -169,6 +170,17 @@ const SECTOR_PALETTE: Record<string, SectorSwatch> = {
 
 const FALLBACK_SWATCH: SectorSwatch = { light: '#5b5b5b', dark: '#a8a8a8' };
 
+/** A 6-digit hex color with a 2-digit alpha suffix appended, for the
+ *  translucent-chip backgrounds used throughout this file's badge/pill
+ *  markup. Three call sites used to each hand-concatenate `${hex}1f`
+ *  independently — one named helper instead, so a future palette entry that
+ *  isn't a plain 6-digit hex (an 8-digit hex, a named CSS color, `rgb(...)`)
+ *  fails in one place instead of silently producing invalid CSS in three.
+ *  Found in review. */
+function withAlpha(hex: string, alphaHex: string): string {
+  return `${hex}${alphaHex}`;
+}
+
 /** Palette entry for a sector, defensively falling back for a future sector
  *  not yet in `SECTOR_PALETTE`. */
 export function sectorSwatch(sector: string): SectorSwatch {
@@ -243,6 +255,20 @@ export function facilityById(facilityId: string): PollutionFacility | null {
   return BY_FACILITY_ID.get(facilityId) ?? null;
 }
 
+// One lookup Map per metric array, built once — mirrors `BY_FACILITY_ID`
+// above. `buildFacilityDetailHtml` used to scan `GHG_ROWS`/`WATER_ROWS` via
+// `.find()` and `TRI_TOP_FACILITIES` via both `.some()` and a separate
+// `.find()` for the same facility on every click; each of those arrays is
+// tiny today, but the pattern was inconsistent with the Map already built
+// for `POLLUTION_FACILITIES` two lines up. Found in review.
+const GHG_BY_FACILITY_ID = new Map(
+  GHG_ROWS.filter((r) => r.facilityId).map((r) => [r.facilityId as string, r]),
+);
+const WATER_BY_FACILITY_ID = new Map(
+  WATER_ROWS.filter((r) => r.facilityId).map((r) => [r.facilityId as string, r]),
+);
+const TRI_BY_FACILITY_ID = new Map(TRI_TOP_FACILITIES.map((r) => [r.facilityId, r]));
+
 // ---------------------------------------------------------------------------
 // Detail content: every sourced metric for a facility, badge-per-metric.
 //
@@ -285,7 +311,7 @@ function badgeHtml(tier: Tier, confidence: Confidence): string {
   return `
     <div class="flex flex-wrap items-center gap-1 mb-1">
       <span class="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wider"
-            style="background-color: ${hex}1f; color: ${hex}">
+            style="background-color: ${withAlpha(hex, '1f')}; color: ${hex}">
         <span class="inline-block w-1.5 h-1.5 rounded-full" style="background-color: ${hex}"></span>
         ${escapeHtml(CONFIDENCE_LABEL[confidence])}
       </span>
@@ -315,7 +341,10 @@ function rowValueHtml(row: PollutionRow, numberFmt: Intl.NumberFormat): string {
   }
 }
 
-const numberFmt = new Intl.NumberFormat('en-US');
+// `numberFmt` is `~/lib/ratepayerWidget`'s shared `nf`, imported above —
+// this file used to build its own second `Intl.NumberFormat('en-US')`
+// instance, the exact per-module duplication `nf` was originally extracted
+// to prevent (see that file's own header). Found in review.
 
 /** The confidence badge shows the number's own confidence where the row has
  *  one (published/pending rows), falling back to entity confidence for a row
@@ -351,7 +380,7 @@ function metricSectionHtml(title: string, unit: string, row: PollutionRow): stri
  *  table carries its own tier/confidence at the module level (`TRI_SOURCE`),
  *  not per row, so it's built separately from `metricSectionHtml` above. */
 function visibilitySectionHtml(facilityId: string): string {
-  const row = TRI_TOP_FACILITIES.find((r) => r.facilityId === facilityId);
+  const row = TRI_BY_FACILITY_ID.get(facilityId);
   if (!row) return '';
 
   const triLink = row.triId
@@ -390,9 +419,9 @@ function visibilitySectionHtml(facilityId: string): string {
  *  and, per spec §2.3/§5, an explicit statement rather than a silent blank
  *  when NO metric row references this facilityId at all. */
 export function buildFacilityDetailHtml(facility: PollutionFacility): string {
-  const ghgRow = GHG_ROWS.find((r) => r.facilityId === facility.facilityId);
-  const waterRow = WATER_ROWS.find((r) => r.facilityId === facility.facilityId);
-  const hasVisibility = TRI_TOP_FACILITIES.some((r) => r.facilityId === facility.facilityId);
+  const ghgRow = GHG_BY_FACILITY_ID.get(facility.facilityId);
+  const waterRow = WATER_BY_FACILITY_ID.get(facility.facilityId);
+  const hasVisibility = TRI_BY_FACILITY_ID.has(facility.facilityId);
 
   const sections = [
     ghgRow ? metricSectionHtml('Climate-warming gases released', 'tons per year', ghgRow) : '',
@@ -413,7 +442,7 @@ export function buildFacilityDetailHtml(facility: PollutionFacility): string {
   return `
     <div class="p-0.5 text-neutral-900 font-sans w-full select-text">
       <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider"
-            style="background-color: ${sectorSw.light}1f; color: ${sectorSw.light}">
+            style="background-color: ${withAlpha(sectorSw.light, '1f')}; color: ${sectorSw.light}">
         <span class="inline-block w-1.5 h-1.5 rounded-full" style="background-color: ${sectorSw.light}"></span>
         ${escapeHtml(facility.sector)}
       </span>
@@ -440,12 +469,12 @@ export function buildFacilityHoverHtml(facility: PollutionFacility): string {
   // `QD_BY_FACILITY_ID.get(...)` plus a second, separate `.find()` over
   // `TRI_TOP_FACILITIES` just to read `.rank`, scanning the same array twice
   // per hover. Found in review.
-  const triRow = TRI_TOP_FACILITIES.find((r) => r.facilityId === facility.facilityId);
+  const triRow = TRI_BY_FACILITY_ID.get(facility.facilityId);
   const qd = triRow?.cumulativeQD;
   return `
     <div class="p-0.5 text-neutral-900 font-sans w-full select-text">
       <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider"
-            style="background-color: ${sectorSw.light}1f; color: ${sectorSw.light}">
+            style="background-color: ${withAlpha(sectorSw.light, '1f')}; color: ${sectorSw.light}">
         <span class="inline-block w-1.5 h-1.5 rounded-full" style="background-color: ${sectorSw.light}"></span>
         ${escapeHtml(facility.sector)}
       </span>
