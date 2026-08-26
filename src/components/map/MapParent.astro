@@ -558,6 +558,15 @@ const news = await fetchLocalNews();
     // not a bug, so this starts as every known sector rather than none.
     let facilitiesWanted = false;
     let facilitySectors: string[] = [...POLLUTION_FACILITY_SECTORS];
+    /** The facility whose panel is currently open, if any — kept in sync by
+     *  a `FACILITY_MARKER_SELECT_EVENT` listener below (set up regardless of
+     *  who dispatched it: this handler's own click, the accessible list, or
+     *  the panel's own close button/Escape key). Exists so turning the layer
+     *  off, or unchecking the open facility's sector, can close its panel
+     *  instead of leaving it open on a pin no longer even on the map — found
+     *  in review; matches spec §3 done-criterion 8's "nothing lingers
+     *  hidden-but-present." */
+    let openFacilityId: string | null = null;
 
     // Everything about the PMTiles overlays — reading each archive, adding its
     // fill and borders, switching it on and off, naming the
@@ -835,6 +844,20 @@ const news = await fetchLocalNews();
         ["get", "sector"],
         ["literal", facilitySectors],
       ] as any);
+      // If the facility whose panel is currently open just got filtered off
+      // the map (layer switched off, or its sector unchecked), close its
+      // panel too rather than leaving it open on a pin that's no longer
+      // visible. Found in review.
+      if (openFacilityId) {
+        const openFacility = facilityById(openFacilityId);
+        const stillVisible =
+          facilitiesWanted && !!openFacility && facilitySectors.includes(openFacility.sector);
+        if (!stillVisible) {
+          document.dispatchEvent(
+            new CustomEvent(FACILITY_MARKER_SELECT_EVENT, { detail: null }),
+          );
+        }
+      }
     };
 
     map.on("load", () => {
@@ -1052,6 +1075,14 @@ const news = await fetchLocalNews();
       document.dispatchEvent(
         new CustomEvent("mapmarkerselect", { detail: { project } }),
       );
+      // Mirrors the facility panel's own mutual-exclusion dispatch
+      // (FacilityDetailParent.astro's `open()`) — without this, selecting a
+      // project marker while a facility pin's detail panel is open left both
+      // persistent panels rendered at once, since only the facility side of
+      // this relationship was closing the other. Found in review.
+      document.dispatchEvent(
+        new CustomEvent(FACILITY_MARKER_SELECT_EVENT, { detail: null }),
+      );
     });
 
     // --- Facility pin hover/click ---
@@ -1117,6 +1148,19 @@ const news = await fetchLocalNews();
 
     map.on("click", FACILITY_LAYER_ID, (e) => {
       if (!e.features || e.features.length === 0) return;
+      // A click hitting both a facility pin and a co-located project marker
+      // fires BOTH layers' click handlers — MapLibre doesn't pick a single
+      // "topmost" one for same-point layer-scoped listeners. Facility pins
+      // are already inserted beneath the project layers so a co-located
+      // marker visually wins (see addDataLayer's `beforeProject` comment);
+      // without this guard the project handler's own selection/flyTo would
+      // fire and then get undone almost immediately by this handler opening
+      // the facility panel (which closes the project panel via its own
+      // mutual-exclusion dispatch) — a visible camera jerk and a popup that
+      // opens and closes within one click. Found in review. Yielding to the
+      // marker here, the same way the map's catch-all deselect handler
+      // already yields to both (`isMarkerAt(e.point) || isFacilityAt(e.point)`).
+      if (isMarkerAt(e.point)) return;
       openFacilityDetail(
         facilityForFeature(e.features[0]),
         e.features[0].geometry.coordinates as [number, number],
@@ -1149,6 +1193,20 @@ const news = await fetchLocalNews();
     document.addEventListener(FACILITY_LIST_SELECT_EVENT, handleFacilityListSelect);
     mapCleanups.push(() =>
       document.removeEventListener(FACILITY_LIST_SELECT_EVENT, handleFacilityListSelect),
+    );
+
+    // Keeps `openFacilityId` current no matter who dispatched the event —
+    // this handler's own click/list-select above, or FacilityDetailParent.astro's
+    // own close button/Escape key, which this file has no other way to hear
+    // about. `applyFacilityFilters` reads it to decide whether a filter
+    // change should close the panel it's tracking.
+    const trackOpenFacility = (event: Event) => {
+      const detail = (event as CustomEvent<{ facility: { facilityId: string } } | null>).detail;
+      openFacilityId = detail?.facility?.facilityId ?? null;
+    };
+    document.addEventListener(FACILITY_MARKER_SELECT_EVENT, trackOpenFacility);
+    mapCleanups.push(() =>
+      document.removeEventListener(FACILITY_MARKER_SELECT_EVENT, trackOpenFacility),
     );
 
     // --- Overlay hover/tap labels ---

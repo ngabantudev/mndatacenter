@@ -152,9 +152,14 @@ interface SectorSwatch {
 }
 
 const SECTOR_PALETTE: Record<string, SectorSwatch> = {
+  // The three taconite categories used near-identical brown/orange swatches
+  // (#9a4a2e/#b5651d/#8a5a2e), defeating the legend's whole purpose — a
+  // reader couldn't actually tell a mine from a processing plant by pin
+  // color. Spread across distinct hues instead of shades of the same one.
+  // Found in review.
   'Taconite mining/processing': { light: '#9a4a2e', dark: '#d97757' },
-  'Taconite processing': { light: '#b5651d', dark: '#e8935a' },
-  'Taconite mining': { light: '#8a5a2e', dark: '#cf9a5c' },
+  'Taconite processing': { light: '#c17a1f', dark: '#f0a94d' },
+  'Taconite mining': { light: '#5c6b3a', dark: '#a8b878' },
   'Coal power generation': { light: '#3d4a5c', dark: '#8fa3bf' },
   'Pulp/paper': { light: '#2f6b45', dark: '#6fbf8c' },
   'Petroleum refining': { light: '#6b2f6b', dark: '#c07fc0' },
@@ -357,7 +362,7 @@ function visibilitySectionHtml(facilityId: string): string {
     'How much this facility could dirty the air over nearby wild places',
     `
       ${badgeHtml(TRI_SOURCE.tier, TRI_SOURCE.confidence)}
-      <p class="text-[11px] font-bold text-neutral-900">Ranked #${row.rank} out of the 16 Minnesota facilities on this list</p>
+      <p class="text-[11px] font-bold text-neutral-900">Ranked #${row.rank} out of the ${TRI_TOP_FACILITIES.length} Minnesota facilities on this list</p>
       <p class="mt-1 text-[10.5px] text-neutral-600 leading-snug">
         The federal government scores facilities on how much their smoke and exhaust could
         hazes up the view in protected wilderness areas and national parks nearby — like the
@@ -431,7 +436,12 @@ export function buildFacilityDetailHtml(facility: PollutionFacility): string {
  *  lives in the click-through detail card above). */
 export function buildFacilityHoverHtml(facility: PollutionFacility): string {
   const sectorSw = sectorSwatch(facility.sector);
-  const qd = QD_BY_FACILITY_ID.get(facility.facilityId);
+  // One lookup for both the score and its rank — this used to be
+  // `QD_BY_FACILITY_ID.get(...)` plus a second, separate `.find()` over
+  // `TRI_TOP_FACILITIES` just to read `.rank`, scanning the same array twice
+  // per hover. Found in review.
+  const triRow = TRI_TOP_FACILITIES.find((r) => r.facilityId === facility.facilityId);
+  const qd = triRow?.cumulativeQD;
   return `
     <div class="p-0.5 text-neutral-900 font-sans w-full select-text">
       <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider"
@@ -443,7 +453,7 @@ export function buildFacilityHoverHtml(facility: PollutionFacility): string {
       <p class="text-[10px] text-neutral-400 font-medium">${escapeHtml(facility.county)} County</p>
       ${
         qd != null
-          ? `<p class="mt-1 text-[10px] text-neutral-600 leading-snug">Ranked #${TRI_TOP_FACILITIES.find((r) => r.facilityId === facility.facilityId)?.rank ?? '?'} of 16 for how much it could dirty the air over nearby parks and wilderness.</p>`
+          ? `<p class="mt-1 text-[10px] text-neutral-600 leading-snug">Ranked #${triRow?.rank ?? '?'} of ${TRI_TOP_FACILITIES.length} for how much it could dirty the air over nearby parks and wilderness.</p>`
           : `<p class="mt-1 text-[10px] text-neutral-500 leading-snug">Not on the state's list of biggest air-visibility impacts.</p>`
       }
       <p class="mt-1 text-[9px] font-semibold text-blue-600 uppercase tracking-wide">Click to see the full sourced record &rarr;</p>

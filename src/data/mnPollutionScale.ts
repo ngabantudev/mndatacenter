@@ -556,15 +556,26 @@ export const AIR_PERMIT_ROWS: PollutionRow[] = [
     value: 250,
     unit: 'proposed diesel generators (~600 MW aggregate)',
     year: 2025,
+    // Downgraded from tier 1 / valueConfidence 'confirmed' — found in review.
+    // `primarySourceUrl` is a trade-press article about the PUC order, not
+    // the order itself, and `documentId` was left null with no "No source
+    // found" note or KNOWN_GAPS entry (unlike the Hermantown/Pine Island MW
+    // rows, which do get one for the same kind of gap) — a real
+    // inconsistency with this file's own sourcing discipline (CLAUDE.md §4).
+    // The regulatory action and its date are well-corroborated (multiple
+    // outlets, a specific date, a specific number), which is why this stays
+    // `corroborated` rather than dropping to `reported`/`pending_verification`
+    // — but it is not yet traced to the PUC's own docket text, so it isn't
+    // `confirmed` and isn't tier 1 either. See KNOWN_GAPS.
     entityConfidence: 'confirmed',
-    valueConfidence: 'confirmed',
-    tier: 1,
+    valueConfidence: 'corroborated',
+    tier: 2,
     primarySourceUrl: 'https://www.datacenterfrontier.com/energy/article/55269574/minnesota-puc-says-no-to-amazons-bid-to-fast-track-250-diesel-generators-for-data-center',
-    documentType: 'PUC order (Certificate-of-Need exemption denial)',
+    documentType: 'Trade press, citing a PUC order (Certificate-of-Need exemption denial)',
     documentId: null,
     retrievedAt: '2026-08-24',
     plainLanguage:
-      'The PUC denied a fast-track exemption for this proposal on 2025-03-01, requiring full Certificate-of-Need review — the aggregate fleet size is what triggered that review. This is a confirmed regulatory decision about a proposal, not an issued emissions permit.',
+      'The PUC denied a fast-track exemption for this proposal on 2025-03-01, requiring full Certificate-of-Need review — the aggregate fleet size is what triggered that review. This is a well-corroborated regulatory decision about a proposal, not an issued emissions permit, and not yet independently re-pulled from the PUC\'s own eDockets filing.',
   },
   {
     facility: 'Minnesota data centers (issued MPCA air permit)',
@@ -657,6 +668,10 @@ export const KNOWN_GAPS: KnownGap[] = [
   {
     summary: 'PUC docket numbers for the Hermantown and Pine Island ESAs are unconfirmed',
     detail: 'Approximate numbers appeared in search results but were not independently verified against the PUC eDockets system itself.',
+  },
+  {
+    summary: 'The Amazon/Becker air-permit row is sourced to trade press, not the PUC docket itself',
+    detail: 'The 250-generator figure and the 2025-03-01 Certificate-of-Need exemption denial are well-corroborated (multiple outlets, a specific date), but this row\'s primarySourceUrl is a Data Center Frontier article about the PUC order, not the order or docket itself, and documentId is null. Downgraded from tier 1/confirmed to tier 2/corroborated to match — same class of gap as the Hermantown/Pine Island rows above, just not previously logged here.',
   },
   {
     summary: 'No steady-state operational MW draw is published for either pending ESA',

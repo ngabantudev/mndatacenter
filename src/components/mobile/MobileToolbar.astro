@@ -136,6 +136,7 @@ const TABS = [
     type SheetChangeDetail,
     type SheetId,
   } from "~/lib/mobileSheet";
+  import { FACILITY_MARKER_SELECT_EVENT } from "~/lib/facilityMarkers";
 
   /** Gap between the toolbar and MapLibre's control stack above it. */
   const CONTROLS_GAP = 12;
@@ -200,7 +201,7 @@ const TABS = [
         // is the other surface that can occupy this space, so a tab taking
         // the slot has to close it too.
         document.dispatchEvent(
-          new CustomEvent("facilitymarkerselect", { detail: null }),
+          new CustomEvent(FACILITY_MARKER_SELECT_EVENT, { detail: null }),
         );
       }
     }
@@ -273,9 +274,9 @@ const TABS = [
         publish();
       }
     };
-    document.addEventListener("facilitymarkerselect", onFacilityMarkerSelect);
+    document.addEventListener(FACILITY_MARKER_SELECT_EVENT, onFacilityMarkerSelect);
     toolbarCleanups.push(() =>
-      document.removeEventListener("facilitymarkerselect", onFacilityMarkerSelect),
+      document.removeEventListener(FACILITY_MARKER_SELECT_EVENT, onFacilityMarkerSelect),
     );
 
     /**

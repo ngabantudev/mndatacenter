@@ -451,6 +451,7 @@ const RANGE_OPTIONS = [
   } from "~/lib/newsFeed";
   import { readStoredFlag, writeStoredFlag } from "~/lib/storage";
   import { onSheetChange, type SheetId } from "~/lib/mobileSheet";
+  import { FACILITY_MARKER_SELECT_EVENT } from "~/lib/facilityMarkers";
 
   const STORAGE_KEY = "newsFeedCollapsed";
   const DESKTOP_MEDIA_QUERY = "(min-width: 768px)";
@@ -1017,9 +1018,9 @@ const RANGE_OPTIONS = [
       isFacilitySelected = !!detail?.facility;
       updatePanelDOM();
     };
-    document.addEventListener("facilitymarkerselect", onFacilityMarkerSelect);
+    document.addEventListener(FACILITY_MARKER_SELECT_EVENT, onFacilityMarkerSelect);
     newsCleanups.push(() =>
-      document.removeEventListener("facilitymarkerselect", onFacilityMarkerSelect),
+      document.removeEventListener(FACILITY_MARKER_SELECT_EVENT, onFacilityMarkerSelect),
     );
 
     newsCleanups.push(

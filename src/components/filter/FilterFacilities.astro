@@ -157,6 +157,16 @@ const sortedFacilities = [...POLLUTION_FACILITIES].sort((a, b) => a.name.localeC
                   <span class="text-[9px] text-ink-4 group-hover:text-ink-2">
                     {facility.sector} — {facility.county} County
                   </span>
+                  <!-- Hidden by default; the script below shows this whenever
+                       this facility's sector is currently unchecked, so the
+                       list actually delivers on the promise above instead of
+                       silently listing facilities a sighted user can't see
+                       pinned on the map right now. Found in review. -->
+                  <span
+                    class="mf-facility-hidden-note hidden text-[9px] italic text-ink-4 mt-0.5"
+                  >
+                    Not currently shown on the map — its sector is unchecked above.
+                  </span>
                 </span>
                 <ChevronRight
                   size={14}
@@ -173,6 +183,7 @@ const sortedFacilities = [...POLLUTION_FACILITIES].sort((a, b) => a.name.localeC
 
 <script>
   import { onReady } from "~/lib/domReady";
+  import { FACILITY_LIST_SELECT_EVENT } from "~/lib/facilityMarkers";
 
   let facilityCleanups: (() => void)[] = [];
 
@@ -193,6 +204,24 @@ const sortedFacilities = [...POLLUTION_FACILITIES].sort((a, b) => a.name.localeC
     );
     if (!master) return;
 
+    // Makes the accessible list actually deliver on its own stated promise
+    // (see the header comment above the <ul> in the markup): a facility
+    // whose sector is unchecked stays listed, but now says so, instead of
+    // silently reading as available when a sighted user can't see its pin.
+    // Found in review — this indicator didn't previously exist despite the
+    // markup's comment already claiming it did.
+    const syncHiddenNotes = (): void => {
+      const checkedSectors = new Set(
+        sectorBoxes.filter((box) => box.checked).map((box) => box.value),
+      );
+      for (const link of facilityLinks) {
+        const sector = link.dataset.facilitySector;
+        const visible = !!sector && checkedSectors.has(sector);
+        const note = link.querySelector<HTMLElement>(".mf-facility-hidden-note");
+        note?.classList.toggle("hidden", visible);
+      }
+    };
+
     const dispatch = (): void => {
       const apiKey = master.dataset.apiKey;
       const sectorsApiKey = master.dataset.sectorsApiKey;
@@ -208,6 +237,7 @@ const sortedFacilities = [...POLLUTION_FACILITIES].sort((a, b) => a.name.localeC
           },
         }),
       );
+      syncHiddenNotes();
     };
 
     const onMasterChange = () => {
@@ -234,7 +264,7 @@ const sortedFacilities = [...POLLUTION_FACILITIES].sort((a, b) => a.name.localeC
         const facilityId = link.dataset.facilityId;
         if (!facilityId) return;
         document.dispatchEvent(
-          new CustomEvent("facilitylistselect", { detail: { facilityId } }),
+          new CustomEvent(FACILITY_LIST_SELECT_EVENT, { detail: { facilityId } }),
         );
       };
       link.addEventListener("click", onFacilityClick);
