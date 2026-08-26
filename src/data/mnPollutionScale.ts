@@ -94,6 +94,12 @@ interface RowBase {
   location: string;
   subjectClass: SubjectClass;
   metric: PollutionMetric;
+  /** Join key into `POLLUTION_FACILITIES` (src/data/mnPollutionFacilities.ts)
+   * for facilities with a mapped pin — see research/facility-pins-spec.md
+   * §2.2. Optional and additive: nothing about how this row is sourced,
+   * reviewed, or typed otherwise changes. Absent for `data_center` rows,
+   * which are never pinned as facilities (see that spec's §2.1). */
+  facilityId?: string;
   /** How well-established it is that this facility belongs on this list at all. */
   entityConfidence: Confidence;
   tier: Tier;
@@ -170,6 +176,7 @@ export type PollutionRow =
 export const GHG_ROWS: PollutionRow[] = [
   {
     facility: 'Sherburne County Generating Station (Sherco)',
+    facilityId: 'sherco',
     sector: 'Coal power generation',
     location: 'Becker, Sherburne Co.',
     subjectClass: 'legacy_industrial',
@@ -201,6 +208,7 @@ export const GHG_ROWS: PollutionRow[] = [
   },
   {
     facility: 'Pine Bend Refinery',
+    facilityId: 'flint-hills-pine-bend',
     sector: 'Petroleum refining',
     location: 'Rosemount, Dakota Co.',
     subjectClass: 'legacy_industrial',
@@ -229,6 +237,7 @@ export const GHG_ROWS: PollutionRow[] = [
   },
   {
     facility: 'Boswell Energy Center',
+    facilityId: 'boswell',
     sector: 'Coal power generation',
     location: 'Cohasset, Itasca Co.',
     subjectClass: 'legacy_industrial',
@@ -335,6 +344,11 @@ export const GHG_ROWS: PollutionRow[] = [
 export const TRI_TOP_FACILITIES: {
   rank: number;
   facility: string;
+  /** Join key into `POLLUTION_FACILITIES` (src/data/mnPollutionFacilities.ts)
+   * — see research/facility-pins-spec.md §2.2. Every row here has one; all
+   * 16 of these facilities were successfully matched to an FRS/TRI
+   * coordinate on the first pass (2026-08-25). */
+  facilityId: string;
   county: string;
   sector: string;
   /** TRI Facility ID, sourced separately from this list's actual origin
@@ -352,22 +366,22 @@ export const TRI_TOP_FACILITIES: {
    * row-matched. Null does not mean zero; see module note above. */
   tonnage2023PowerPlant: { co2: number; nox: number; so2: number } | null;
 }[] = [
-  { rank: 1, facility: 'US Steel Corp – Minntac', county: 'St. Louis', sector: 'Taconite mining/processing', triId: null, cumulativeQD: 500.71, tonnage2020: { ammonia: 10.24, co2: 1_334_797.81, nox: 5_963.10, pm10: 2_530.62, pm25: 1_889.63, so2: 904.22 }, tonnage2023PowerPlant: null },
-  { rank: 2, facility: 'United Taconite LLC – Fairlane Plant', county: 'St. Louis', sector: 'Taconite processing', triId: null, cumulativeQD: 244.66, tonnage2020: { ammonia: 0.04, co2: 548_411.44, nox: 4_346.26, pm10: 742.66, pm25: 407.98, so2: 442.16 }, tonnage2023PowerPlant: null },
-  { rank: 3, facility: 'Xcel Energy – Sherburne County (Sherco)', county: 'Sherburne', sector: 'Coal power generation', triId: '55308NRTHR13999', cumulativeQD: 173.99, tonnage2020: { ammonia: 6.55, co2: 10_148_940.09, nox: 6_033.59, pm10: 646.45, pm25: 316.19, so2: 3_984.71 }, tonnage2023PowerPlant: { co2: 7_859_548.08, nox: 4_861.32, so2: 2_635.88 } },
-  { rank: 4, facility: 'Hibbing Taconite Co', county: 'St. Louis', sector: 'Taconite processing', triId: null, cumulativeQD: 127.61, tonnage2020: { ammonia: 0.66, co2: 265_856.04, nox: 1_594.35, pm10: 1_342.95, pm25: 335.57, so2: 533.53 }, tonnage2023PowerPlant: null },
-  { rank: 5, facility: 'Cleveland-Cliffs Minorca Mine', county: 'St. Louis', sector: 'Taconite mining', triId: null, cumulativeQD: 89.57, tonnage2020: { ammonia: 0.29, co2: 263_179.19, nox: 1_151.11, pm10: 584.93, pm25: 169.15, so2: 169.25 }, tonnage2023PowerPlant: null },
-  { rank: 6, facility: 'Minnesota Power – Boswell Energy Center', county: 'Itasca', sector: 'Coal power generation', triId: null, cumulativeQD: 74.20, tonnage2020: { ammonia: 1.02, co2: 5_023_466.09, nox: 2_039.03, pm10: 428.72, pm25: 227.44, so2: 491.00 }, tonnage2023PowerPlant: { co2: 5_682_618.35, nox: 2_335.31, so2: 578.62 } },
-  { rank: 7, facility: 'Boise White Paper LLC', county: 'Koochiching', sector: 'Pulp/paper', triId: null, cumulativeQD: 72.91, tonnage2020: { ammonia: 36.11, co2: 1_050_992.29, nox: 798.28, pm10: 105.91, pm25: 105.86, so2: 15.95 }, tonnage2023PowerPlant: null },
-  { rank: 8, facility: 'US Steel Corp – Keetac', county: 'St. Louis', sector: 'Taconite processing', triId: null, cumulativeQD: 61.40, tonnage2020: { ammonia: null, co2: 100_672.46, nox: 1_388.00, pm10: 291.76, pm25: 195.56, so2: 247.50 }, tonnage2023PowerPlant: null },
-  { rank: 9, facility: 'Sappi Cloquet LLC', county: 'Carlton', sector: 'Pulp/paper', triId: null, cumulativeQD: 55.97, tonnage2020: { ammonia: 24.46, co2: 1_451_816.23, nox: 1_290.51, pm10: 187.97, pm25: 76.86, so2: 493.82 }, tonnage2023PowerPlant: null },
-  { rank: 10, facility: 'Northshore Mining Co', county: 'Lake', sector: 'Taconite mining/processing', triId: null, cumulativeQD: 44.74, tonnage2020: { ammonia: 0.82, co2: 182_204.37, nox: 639.20, pm10: 302.58, pm25: 204.31, so2: 106.86 }, tonnage2023PowerPlant: null },
-  { rank: 11, facility: 'Flint Hills Resources Pine Bend Refinery', county: 'Dakota', sector: 'Petroleum refining', triId: '55164KCHRFPOBOX', cumulativeQD: 13.75, tonnage2020: { ammonia: 40.17, co2: 4_369_021.55, nox: 1_031.39, pm10: 259.71, pm25: 212.28, so2: 594.71 }, tonnage2023PowerPlant: null },
-  { rank: 12, facility: 'Northshore Mining Co – Peter Mitchell', county: 'St. Louis', sector: 'Taconite mining', triId: null, cumulativeQD: 11.08, tonnage2020: { ammonia: null, co2: 2_188.50, nox: 2.24, pm10: 275.78, pm25: 170.39, so2: 0.17 }, tonnage2023PowerPlant: null },
-  { rank: 13, facility: 'American Crystal Sugar – East Grand Forks', county: 'Polk', sector: 'Sugar mill', triId: null, cumulativeQD: 11.05, tonnage2020: { ammonia: 75.63, co2: 215_311.75, nox: 613.35, pm10: 181.79, pm25: 158.17, so2: 946.31 }, tonnage2023PowerPlant: null },
-  { rank: 14, facility: 'Southern Minnesota Beet Sugar Coop', county: 'Renville', sector: 'Sugar mill', triId: null, cumulativeQD: 11.01, tonnage2020: { ammonia: 82.44, co2: 474_223.34, nox: 1_046.97, pm10: 142.80, pm25: 95.91, so2: 876.52 }, tonnage2023PowerPlant: null },
-  { rank: 15, facility: 'Xcel Energy – Allen S King Generating Plant', county: 'Washington', sector: 'Coal power generation', triId: null, cumulativeQD: 5.58, tonnage2020: { ammonia: 4.41, co2: 938_952.57, nox: 425.10, pm10: 73.38, pm25: 47.93, so2: 490.54 }, tonnage2023PowerPlant: { co2: 1_090_211.40, nox: 492.61, so2: 557.52 } },
-  { rank: 16, facility: 'Minnesota Power – Hibbard Renewable Energy Center', county: 'St. Louis', sector: 'Electricity generation via combustion', triId: null, cumulativeQD: 5.40, tonnage2020: { ammonia: 53.06, co2: 200_690.80, nox: 299.02, pm10: 24.98, pm25: 19.13, so2: 54.29 }, tonnage2023PowerPlant: null },
+  { rank: 1, facility: 'US Steel Corp – Minntac', facilityId: 'minntac', county: 'St. Louis', sector: 'Taconite mining/processing', triId: null, cumulativeQD: 500.71, tonnage2020: { ammonia: 10.24, co2: 1_334_797.81, nox: 5_963.10, pm10: 2_530.62, pm25: 1_889.63, so2: 904.22 }, tonnage2023PowerPlant: null },
+  { rank: 2, facility: 'United Taconite LLC – Fairlane Plant', facilityId: 'united-taconite-fairlane', county: 'St. Louis', sector: 'Taconite processing', triId: null, cumulativeQD: 244.66, tonnage2020: { ammonia: 0.04, co2: 548_411.44, nox: 4_346.26, pm10: 742.66, pm25: 407.98, so2: 442.16 }, tonnage2023PowerPlant: null },
+  { rank: 3, facility: 'Xcel Energy – Sherburne County (Sherco)', facilityId: 'sherco', county: 'Sherburne', sector: 'Coal power generation', triId: '55308NRTHR13999', cumulativeQD: 173.99, tonnage2020: { ammonia: 6.55, co2: 10_148_940.09, nox: 6_033.59, pm10: 646.45, pm25: 316.19, so2: 3_984.71 }, tonnage2023PowerPlant: { co2: 7_859_548.08, nox: 4_861.32, so2: 2_635.88 } },
+  { rank: 4, facility: 'Hibbing Taconite Co', facilityId: 'hibbing-taconite', county: 'St. Louis', sector: 'Taconite processing', triId: null, cumulativeQD: 127.61, tonnage2020: { ammonia: 0.66, co2: 265_856.04, nox: 1_594.35, pm10: 1_342.95, pm25: 335.57, so2: 533.53 }, tonnage2023PowerPlant: null },
+  { rank: 5, facility: 'Cleveland-Cliffs Minorca Mine', facilityId: 'minorca-mine', county: 'St. Louis', sector: 'Taconite mining', triId: null, cumulativeQD: 89.57, tonnage2020: { ammonia: 0.29, co2: 263_179.19, nox: 1_151.11, pm10: 584.93, pm25: 169.15, so2: 169.25 }, tonnage2023PowerPlant: null },
+  { rank: 6, facility: 'Minnesota Power – Boswell Energy Center', facilityId: 'boswell', county: 'Itasca', sector: 'Coal power generation', triId: null, cumulativeQD: 74.20, tonnage2020: { ammonia: 1.02, co2: 5_023_466.09, nox: 2_039.03, pm10: 428.72, pm25: 227.44, so2: 491.00 }, tonnage2023PowerPlant: { co2: 5_682_618.35, nox: 2_335.31, so2: 578.62 } },
+  { rank: 7, facility: 'Boise White Paper LLC', facilityId: 'boise-white-paper', county: 'Koochiching', sector: 'Pulp/paper', triId: null, cumulativeQD: 72.91, tonnage2020: { ammonia: 36.11, co2: 1_050_992.29, nox: 798.28, pm10: 105.91, pm25: 105.86, so2: 15.95 }, tonnage2023PowerPlant: null },
+  { rank: 8, facility: 'US Steel Corp – Keetac', facilityId: 'keetac', county: 'St. Louis', sector: 'Taconite processing', triId: null, cumulativeQD: 61.40, tonnage2020: { ammonia: null, co2: 100_672.46, nox: 1_388.00, pm10: 291.76, pm25: 195.56, so2: 247.50 }, tonnage2023PowerPlant: null },
+  { rank: 9, facility: 'Sappi Cloquet LLC', facilityId: 'sappi-cloquet', county: 'Carlton', sector: 'Pulp/paper', triId: null, cumulativeQD: 55.97, tonnage2020: { ammonia: 24.46, co2: 1_451_816.23, nox: 1_290.51, pm10: 187.97, pm25: 76.86, so2: 493.82 }, tonnage2023PowerPlant: null },
+  { rank: 10, facility: 'Northshore Mining Co', facilityId: 'northshore-mining', county: 'Lake', sector: 'Taconite mining/processing', triId: null, cumulativeQD: 44.74, tonnage2020: { ammonia: 0.82, co2: 182_204.37, nox: 639.20, pm10: 302.58, pm25: 204.31, so2: 106.86 }, tonnage2023PowerPlant: null },
+  { rank: 11, facility: 'Flint Hills Resources Pine Bend Refinery', facilityId: 'flint-hills-pine-bend', county: 'Dakota', sector: 'Petroleum refining', triId: '55164KCHRFPOBOX', cumulativeQD: 13.75, tonnage2020: { ammonia: 40.17, co2: 4_369_021.55, nox: 1_031.39, pm10: 259.71, pm25: 212.28, so2: 594.71 }, tonnage2023PowerPlant: null },
+  { rank: 12, facility: 'Northshore Mining Co – Peter Mitchell', facilityId: 'northshore-peter-mitchell', county: 'St. Louis', sector: 'Taconite mining', triId: null, cumulativeQD: 11.08, tonnage2020: { ammonia: null, co2: 2_188.50, nox: 2.24, pm10: 275.78, pm25: 170.39, so2: 0.17 }, tonnage2023PowerPlant: null },
+  { rank: 13, facility: 'American Crystal Sugar – East Grand Forks', facilityId: 'american-crystal-sugar-egf', county: 'Polk', sector: 'Sugar mill', triId: null, cumulativeQD: 11.05, tonnage2020: { ammonia: 75.63, co2: 215_311.75, nox: 613.35, pm10: 181.79, pm25: 158.17, so2: 946.31 }, tonnage2023PowerPlant: null },
+  { rank: 14, facility: 'Southern Minnesota Beet Sugar Coop', facilityId: 'southern-mn-beet-sugar', county: 'Renville', sector: 'Sugar mill', triId: null, cumulativeQD: 11.01, tonnage2020: { ammonia: 82.44, co2: 474_223.34, nox: 1_046.97, pm10: 142.80, pm25: 95.91, so2: 876.52 }, tonnage2023PowerPlant: null },
+  { rank: 15, facility: 'Xcel Energy – Allen S King Generating Plant', facilityId: 'xcel-allen-s-king', county: 'Washington', sector: 'Coal power generation', triId: null, cumulativeQD: 5.58, tonnage2020: { ammonia: 4.41, co2: 938_952.57, nox: 425.10, pm10: 73.38, pm25: 47.93, so2: 490.54 }, tonnage2023PowerPlant: { co2: 1_090_211.40, nox: 492.61, so2: 557.52 } },
+  { rank: 16, facility: 'Minnesota Power – Hibbard Renewable Energy Center', facilityId: 'hibbard', county: 'St. Louis', sector: 'Electricity generation via combustion', triId: null, cumulativeQD: 5.40, tonnage2020: { ammonia: 53.06, co2: 200_690.80, nox: 299.02, pm10: 24.98, pm25: 19.13, so2: 54.29 }, tonnage2023PowerPlant: null },
 ];
 
 /** Direct per-chemical release-profile link once a TRI Facility ID is known.
@@ -462,6 +476,7 @@ export const MW_ROWS: PollutionRow[] = [
 export const WATER_ROWS: PollutionRow[] = [
   {
     facility: 'US Steel Minntac',
+    facilityId: 'minntac',
     sector: 'Taconite processing',
     location: 'Mt. Iron, St. Louis Co.',
     subjectClass: 'legacy_industrial',
