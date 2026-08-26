@@ -1,34 +1,21 @@
 ---
 // src/components/news/NewsFeedParent.astro
 import { formatNewsDate, type NewsPayload } from "~/lib/newsFeed";
-import { CloudOff, RefreshCw, Factory, Camera } from "lucide-astro";
+import { CloudOff, Newspaper, RefreshCw } from "lucide-astro";
 
-/**
- * The two subjects this panel tracks, and what identifies each of them on
- * screen. Kept next to the markup that reads it rather than in newsFeed.ts,
- * since a header icon and a pill label are presentation, not the fetch/filter
- * contract that file owns — newsFeed.ts's `NewsTopic.label` is closely
- * related but serves the header title specifically, while this map also
- * supplies the shorter pill text and the icon.
- */
-const TOPIC_META = {
-  datacenter: { title: "Data Center Coverage", pill: "Data centers", Icon: Factory },
-  surveillance: { title: "Surveillance Tech Coverage", pill: "Surveillance", Icon: Camera },
-} as const;
-
-type TopicId = keyof typeof TOPIC_META;
-
-interface Props {
-  /** One payload per topic, so the panel can switch instantly on the client
-   *  without a first fetch — see MapParent.astro, which fetches both. */
-  news: Record<TopicId, NewsPayload>;
+interface Props extends NewsPayload {
   initialDays?: number;
-  initialTopic?: TopicId;
 }
 
-const { news, initialDays = 7, initialTopic = "datacenter" } = Astro.props;
-
-const { newsItems, errorMessage, truncated, partial } = news[initialTopic];
+const {
+  newsItems,
+  errorMessage,
+  truncated,
+  partial,
+  stale,
+  storedAt,
+  initialDays = 7,
+} = Astro.props;
 
 // Said once, here, so the server's first paint and the client's re-render
 // below can't drift into telling the reader two different things.
@@ -109,31 +96,13 @@ const RANGE_OPTIONS = [
     <div
       class="flex items-center justify-center w-7 h-7 rounded-lg bg-hover shrink-0"
     >
-      <!--
-        One icon per topic, swapped by hiding rather than by re-rendering an
-        SVG from the client script — lucide-astro's icons are compiled markup,
-        not something the script can regenerate cheaply. `data-topic-icon`
-        is how initNewsFeed finds the pair to toggle on switch.
-      -->
-      {
-        (Object.entries(TOPIC_META) as [TopicId, (typeof TOPIC_META)[TopicId]][]).map(
-          ([id, meta]) => (
-            <meta.Icon
-              data-topic-icon={id}
-              size={14}
-              stroke-width={2}
-              class={`text-accent ${id === initialTopic ? "" : "hidden"}`}
-            />
-          ),
-        )
-      }
+      <Newspaper size={14} stroke-width={2} class="text-accent" />
     </div>
     <div class="min-w-0 flex-1">
       <h4
-        id="nf-topic-title"
         class="text-[10px] font-bold text-ink mt-1 uppercase tracking-wider leading-none"
       >
-        {TOPIC_META[initialTopic].title}
+        Related MN Coverage
       </h4>
     </div>
     <!--
@@ -163,37 +132,6 @@ const RANGE_OPTIONS = [
           stroke-linecap="round"></path>
       </svg>
     </button>
-  </div>
-
-  <!--
-    Topic Selector. Same `.band-sub` chrome surface as the range row below, so
-    the two selector rows read as one control stack rather than the topic pick
-    looking like a second, competing header. `aria-pressed` + `role="group"`
-    mirrors the range group's own pattern exactly — this codebase already has
-    a tested, accessible two/four-way pill switch, and diverging from it here
-    would just be a second thing to keep in sync.
-  -->
-  <div
-    id="nf-topic-group"
-    role="group"
-    aria-label="News topic"
-    class="band-sub bg-panel flex items-center gap-1.5 px-4 py-2.5 border-b border-hair shrink-0"
-  >
-    {
-      (Object.entries(TOPIC_META) as [TopicId, (typeof TOPIC_META)[TopicId]][]).map(
-        ([id, meta]) => (
-          <button
-            type="button"
-            class="nf-topic-btn flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider px-3 min-h-8 md:min-h-0 md:py-1 rounded-full border transition-colors text-ink-4 border-hair hover:text-ink"
-            data-topic={id}
-            aria-pressed={id === initialTopic ? "true" : "false"}
-          >
-            <meta.Icon size={11} stroke-width={2} aria-hidden="true" />
-            {meta.pill}
-          </button>
-        ),
-      )
-    }
   </div>
 
   <!--
@@ -498,11 +436,7 @@ const RANGE_OPTIONS = [
   is:inline
   type="application/json"
   id="nf-initial-data"
-  data-initial-topic={initialTopic}
-  set:html={JSON.stringify({
-    payloads: news,
-    notices: { cap: CAP_NOTICE, partial: PARTIAL_NOTICE },
-  }).replace(/</g, "\\u003c")}
+  set:html={JSON.stringify({ newsItems, errorMessage, truncated, partial, stale, storedAt, notices: { cap: CAP_NOTICE, partial: PARTIAL_NOTICE } }).replace(/</g, "\\u003c")}
 />
 
 <script>
@@ -512,7 +446,6 @@ const RANGE_OPTIONS = [
     collapseDuplicates,
     formatCacheAge,
     formatNewsDate,
-    NEWS_TOPICS,
     type NewsItem,
     type NewsPayload,
   } from "~/lib/newsFeed";
@@ -523,11 +456,6 @@ const RANGE_OPTIONS = [
   const DESKTOP_MEDIA_QUERY = "(min-width: 768px)";
   const DAY_MS = 24 * 60 * 60 * 1000;
 
-  const TOPIC_TITLES: Record<string, string> = {
-    datacenter: "Data Center Coverage",
-    surveillance: "Surveillance Tech Coverage",
-  };
-
   let isMarkerSelected = false;
   /** Desktop only: the pull-tab's persisted state. */
   let isNewsCollapsed = false;
@@ -535,89 +463,53 @@ const RANGE_OPTIONS = [
   let openSheet: SheetId | null = null;
   let newsCleanups: (() => void)[] = [];
   let currentDays = 7;
-  /** Which topic's pool `currentDays` is being rendered from. */
-  let currentTopic = "datacenter";
   let desktopMql: MediaQueryList | null = null;
 
   /** Ceiling on one /api/news call — see the note at the fetch itself. */
   const NEWS_FETCH_TIMEOUT_MS = 12_000;
 
+  // Every article ever fetched this session, keyed by normalized
+  // title+source (see dedupeKey below) — not by url. Google News RSS
+  // doesn't return consistent results across *differently scoped* queries
+  // for the same underlying story: a `when:1d` query and a `when:7d`
+  // query can report the same headline under two different Google
+  // redirect URLs and two different published dates, and one is not
+  // reliably a superset of the other in either direction. That means
+  // every range still has to hit the network for itself (there is no way
+  // to safely derive a narrower window's results by filtering a wider
+  // window's cached response, or vice versa — an earlier version of this
+  // file tried exactly that and silently dropped today's freshest article
+  // from "24H" because the cached "7D" fetch never contained it), and
+  // deduping by url would show that same story twice. What accumulating
+  // fetched results into one title-keyed pool *does* still buy us: once
+  // an article has been seen under any window, switching to a wider
+  // window won't lose it or duplicate it just because that window's own
+  // live query returned a different URL/date for the identical headline.
+  let articleCache = new Map<string, NewsItem>();
+  let lastFetchError: string | null = null;
+
   /**
-   * Everything that has to be tracked once per topic rather than once for the
-   * whole panel — see the fields below for what each one is for. Split out
-   * the moment a second topic existed, because every one of these used to be
-   * a single module-level variable, and a variable can't remember two
-   * subjects' worth of headlines, errors, and staleness at once: switching
-   * topics would otherwise either lose the other topic's pool or bleed one
-   * topic's outage banner onto the other's fresh list.
+   * When the items currently in the pool were fetched, ISO.
+   *
+   * Tracked across fetches rather than read per response, because the banner
+   * that uses it appears exactly when the latest response has no date of its
+   * own: the refresh failed, and what's on screen is whatever the last
+   * *successful* one left behind. Overwritten only on success, so a run of
+   * failures keeps dating the copy the reader is actually looking at.
    */
-  interface TopicState {
-    // Every article ever fetched this session for this topic, keyed by
-    // normalized title+source (see dedupeKey below) — not by url. Google News
-    // RSS doesn't return consistent results across *differently scoped*
-    // queries for the same underlying story: a `when:1d` query and a
-    // `when:7d` query can report the same headline under two different Google
-    // redirect URLs and two different published dates, and one is not
-    // reliably a superset of the other in either direction. That means every
-    // range still has to hit the network for itself (there is no way to
-    // safely derive a narrower window's results by filtering a wider
-    // window's cached response, or vice versa — an earlier version of this
-    // file tried exactly that and silently dropped today's freshest article
-    // from "24H" because the cached "7D" fetch never contained it), and
-    // deduping by url would show that same story twice. What accumulating
-    // fetched results into one title-keyed pool *does* still buy us: once an
-    // article has been seen under any window, switching to a wider window
-    // won't lose it or duplicate it just because that window's own live
-    // query returned a different URL/date for the identical headline.
-    articleCache: Map<string, NewsItem>;
-    lastFetchError: string | null;
-    /**
-     * When the items currently in this topic's pool were fetched, ISO.
-     *
-     * Tracked across fetches rather than read per response, because the
-     * banner that uses it appears exactly when the latest response has no
-     * date of its own: the refresh failed, and what's on screen is whatever
-     * the last *successful* one left behind. Overwritten only on success, so
-     * a run of failures keeps dating the copy the reader is actually looking
-     * at.
-     */
-    lastStoredAt: string | null;
-    /**
-     * Whether what's on screen for this topic is current.
-     *
-     * Separate from `lastFetchError` rather than folded into it, because the
-     * two answer different questions and only one of them is a problem. A
-     * refresh can fail outright, or it can succeed and hand back the route's
-     * own last-good copy — both leave the reader looking at old headlines,
-     * which is what the banner is about, but only the first is an error and
-     * only the first should ever reach the outage state.
-     */
-    degraded: boolean;
-    // Coverage is a property of the window being shown, not of the
-    // accumulated pool, so it's tracked per window too: switching from 1Y
-    // back to 7D has to drop the caveat along with the year's extra articles.
-    windowNotice: Map<number, "cap" | "partial">;
-  }
+  let lastStoredAt: string | null = null;
 
-  function freshTopicState(): TopicState {
-    return {
-      articleCache: new Map(),
-      lastFetchError: null,
-      lastStoredAt: null,
-      degraded: false,
-      windowNotice: new Map(),
-    };
-  }
-
-  const topicStates = new Map<string, TopicState>();
-  function stateFor(topic: string): TopicState {
-    let state = topicStates.get(topic);
-    if (!state) {
-      state = freshTopicState();
-      topicStates.set(topic, state);
-    }
-    return state;
-  }
+  /**
+   * Whether what's on screen is current.
+   *
+   * Separate from `lastFetchError` rather than folded into it, because the two
+   * answer different questions and only one of them is a problem. A refresh can
+   * fail outright, or it can succeed and hand back the route's own last-good
+   * copy — both leave the reader looking at old headlines, which is what the
+   * banner is about, but only the first is an error and only the first should
+   * ever reach the outage state.
+   */
+  let degraded = false;
 
   // Google's per-query redirect URLs aren't a stable identity for "the
   // same story" (see note above), but a title from the same outlet is —
@@ -627,36 +519,42 @@ const RANGE_OPTIONS = [
     return `${item.title.trim().toLowerCase()}::${item.source.trim().toLowerCase()}`;
   }
 
-  function mergeItems(topic: string, items: NewsItem[]): void {
-    const cache = stateFor(topic).articleCache;
-    for (const item of items) cache.set(dedupeKey(item), item);
+  function mergeItems(items: NewsItem[]): void {
+    for (const item of items) articleCache.set(dedupeKey(item), item);
   }
 
-  function itemsWithinWindow(topic: string, days: number): NewsItem[] {
+  function itemsWithinWindow(days: number): NewsItem[] {
     const cutoff = Date.now() - days * DAY_MS;
-    const stopWords = NEWS_TOPICS[topic]?.stopWords;
     return collapseDuplicates(
-      Array.from(stateFor(topic).articleCache.values())
+      Array.from(articleCache.values())
         .filter((item) => new Date(item.published).getTime() >= cutoff)
         .sort(byPublishedDesc),
-      stopWords,
     );
   }
 
   // Carried over from the server render rather than restated here, so the two
-  // copies of these sentences can't drift apart. Topic-agnostic — both
-  // topics hit the same Google cap and the same partial-window case, so one
-  // pair of sentences serves either.
+  // copies of these sentences can't drift apart.
   let notices = { cap: "", partial: "" };
 
-  type InitialPayload = {
-    payloads: Record<string, NewsPayload>;
+  // Coverage is a property of the window being shown, not of the accumulated
+  // pool, so it's tracked per window: switching from 1Y back to 7D has to drop
+  // the caveat along with the year's extra articles.
+  const windowNotice = new Map<number, "cap" | "partial">();
+
+  type InitialPayload = NewsPayload & {
     notices?: { cap: string; partial: string };
   };
 
   function readInitialPayload(): InitialPayload {
     const el = document.getElementById("nf-initial-data");
-    const empty: InitialPayload = { payloads: {} };
+    const empty: InitialPayload = {
+      newsItems: [],
+      errorMessage: null,
+      truncated: false,
+      partial: false,
+      stale: false,
+      storedAt: null,
+    };
     if (!el?.textContent) return empty;
     try {
       return JSON.parse(el.textContent);
@@ -746,17 +644,10 @@ const RANGE_OPTIONS = [
    * fell back to the pool and rendered it with no indication that it had, so
    * an outage looked exactly like a quiet afternoon.
    */
-  function renderNews(
-    topic: string,
-    days: number,
-    newsItems: NewsItem[],
-    errorMessage: string | null,
-  ): void {
+  function renderNews(newsItems: NewsItem[], errorMessage: string | null): void {
     const area = document.getElementById("nf-content-area");
     if (!area) return;
     area.removeAttribute("aria-busy");
-
-    const state = stateFor(topic);
 
     if (newsItems.length === 0) {
       const node = stateNode(errorMessage ? "nf-tpl-outage" : "nf-tpl-empty");
@@ -773,9 +664,9 @@ const RANGE_OPTIONS = [
 
     const parts: Node[] = [];
 
-    if (state.degraded) {
+    if (degraded) {
       const banner = stateNode("nf-tpl-stale");
-      const age = formatCacheAge(state.lastStoredAt);
+      const age = formatCacheAge(lastStoredAt);
       if (banner) {
         const slot = banner.querySelector<HTMLElement>("[data-nf-age]");
         // The lead reads "…showing saved headlines", so the age is a suffix
@@ -788,7 +679,7 @@ const RANGE_OPTIONS = [
       }
     }
 
-    const kind = state.windowNotice.get(days);
+    const kind = windowNotice.get(currentDays);
     const text = kind ? notices[kind] : "";
     if (text) {
       const p = document.createElement("p");
@@ -822,47 +713,21 @@ const RANGE_OPTIONS = [
     });
   }
 
-  function updateTopicButtons(root: HTMLElement): void {
-    root.querySelectorAll<HTMLButtonElement>(".nf-topic-btn").forEach((btn) => {
-      const isActive = btn.dataset.topic === currentTopic;
-      btn.setAttribute("aria-pressed", String(isActive));
-      btn.classList.add(...(isActive ? PILL_ON : PILL_OFF));
-      btn.classList.remove(...(isActive ? PILL_OFF : PILL_ON));
-    });
-  }
-
-  /** Swaps the header icon and title to match the active topic. Both icons
-   *  are always in the DOM (see the frontmatter) — this only toggles which
-   *  one is hidden, rather than asking the script to build lucide-astro's
-   *  compiled SVG markup by hand. */
-  function updateTopicHeader(): void {
-    document.querySelectorAll<HTMLElement>("[data-topic-icon]").forEach((el) => {
-      el.classList.toggle("hidden", el.dataset.topicIcon !== currentTopic);
-    });
-    const title = document.getElementById("nf-topic-title");
-    if (title) title.textContent = TOPIC_TITLES[currentTopic] ?? title.textContent;
-  }
-
   /**
-   * Fetch and render one (topic, window) pair.
+   * Fetch and render one window.
    *
    * `silent` is for the refresh on mount, where there is already server-rendered
    * content on screen: flashing "Loading…" over headlines the reader is halfway
    * through, to replace them with the same headlines, is worse than saying
-   * nothing. A range or topic *click* is an explicit request and does show
-   * progress.
+   * nothing. A range *click* is an explicit request and does show progress.
    */
   async function showRange(
     root: HTMLElement,
     days: number,
-    opts: { silent?: boolean; topic?: string } = {},
+    opts: { silent?: boolean } = {},
   ): Promise<void> {
     currentDays = days;
-    if (opts.topic) currentTopic = opts.topic;
-    const topic = currentTopic;
     updateRangeButtons(root);
-    updateTopicButtons(root);
-    updateTopicHeader();
 
     // Always fetch this window's own live results — a wider window's
     // cached response can't be trusted to contain everything a direct
@@ -870,9 +735,7 @@ const RANGE_OPTIONS = [
     const status = document.getElementById("nf-range-status");
     if (status && !opts.silent) status.textContent = "Loading…";
 
-    const buttons = root.querySelectorAll<HTMLButtonElement>(
-      ".nf-range-btn, .nf-topic-btn",
-    );
+    const buttons = root.querySelectorAll<HTMLButtonElement>(".nf-range-btn");
     if (!opts.silent) {
       buttons.forEach((btn) => (btn.disabled = true));
       // The skeleton replaces the previous window's headlines, which is right
@@ -881,8 +744,6 @@ const RANGE_OPTIONS = [
       // would show them results for a window they didn't ask for.
       renderSkeleton();
     }
-
-    const state = stateFor(topic);
 
     try {
       // Bounded, because the failure this guards against isn't a slow answer —
@@ -893,32 +754,32 @@ const RANGE_OPTIONS = [
       // QUERY_BUDGET_MS in ~/lib/newsFeed.ts) and its queries run in parallel,
       // so this sits above a legitimately slow-but-working refresh rather than
       // cutting one off.
-      const res = await fetch(`/api/news?days=${days}&topic=${topic}`, {
+      const res = await fetch(`/api/news?days=${days}`, {
         signal: AbortSignal.timeout(NEWS_FETCH_TIMEOUT_MS),
       });
       if (!res.ok) throw new Error("Request failed");
       const data = (await res.json()) as NewsPayload;
       if (data.errorMessage) {
-        state.lastFetchError = data.errorMessage;
+        lastFetchError = data.errorMessage;
         // Nothing live arrived, so whatever the pool renders from here is by
         // definition not current.
-        state.degraded = true;
+        degraded = true;
       } else {
-        mergeItems(topic, data.newsItems ?? []);
-        state.lastFetchError = null;
+        mergeItems(data.newsItems ?? []);
+        lastFetchError = null;
         // A response the route served from its *own* last-good copy is still a
         // successful fetch — it just isn't live, and `stale` is how the route
         // says so. `storedAt` dates the copy in both cases.
-        state.degraded = data.stale === true;
-        if (data.storedAt) state.lastStoredAt = data.storedAt;
+        degraded = data.stale === true;
+        if (data.storedAt) lastStoredAt = data.storedAt;
         // Recorded, not just read, because the pool this window renders from
         // accumulates across fetches: once 1Y has been shown to be cut off,
         // coming back to it later must still say so. The cap is stated ahead
         // of a failed segment when both apply — it's the permanent limit,
         // where the other clears on the next successful fetch.
-        if (data.truncated) state.windowNotice.set(days, "cap");
-        else if (data.partial) state.windowNotice.set(days, "partial");
-        else state.windowNotice.delete(days);
+        if (data.truncated) windowNotice.set(days, "cap");
+        else if (data.partial) windowNotice.set(days, "partial");
+        else windowNotice.delete(days);
       }
       // One call, and `lastFetchError` straight through — no fallback sentence
       // behind it, and no branch on whether the pool happens to hold anything.
@@ -950,23 +811,14 @@ const RANGE_OPTIONS = [
       // to render. Let `renderNews` decide: it shows the list when there is
       // one — under the stale banner if `degraded` — and otherwise picks its
       // template from whether the fetch actually failed.
-      //
-      // Guarded against a topic switch that happened mid-fetch: if the reader
-      // has since moved to a different topic than the one this response is
-      // for, rendering it now would label topic B's headlines with topic A's
-      // header — the one genuinely new failure mode two topics introduce.
-      if (currentTopic === topic && currentDays === days) {
-        renderNews(topic, days, itemsWithinWindow(topic, days), state.lastFetchError);
-      }
+      renderNews(itemsWithinWindow(days), lastFetchError);
     } catch {
       // Reached by the abort above as well as by a network failure. The pool is
       // still the right thing to show if it has anything for this window; if it
       // does not, this is an outage and has to say so rather than falling
       // through to the quiet-week copy.
-      state.degraded = true;
-      if (currentTopic === topic && currentDays === days) {
-        renderNews(topic, days, itemsWithinWindow(topic, days), "Couldn't load news for that range.");
-      }
+      degraded = true;
+      renderNews(itemsWithinWindow(days), "Couldn't load news for that range.");
     } finally {
       buttons.forEach((btn) => (btn.disabled = false));
       if (status && !opts.silent) status.textContent = "";
@@ -1004,35 +856,30 @@ const RANGE_OPTIONS = [
       contentArea?.removeEventListener("click", onRetryClick),
     );
 
-    // Seed each topic's own pool with whatever the server already fetched for
-    // the initial (default) range, so neither is lost if the user switches
-    // topic or range and back.
-    topicStates.clear();
-    const initialData = readInitialPayload();
-    notices = initialData.notices ?? { cap: "", partial: "" };
-
-    currentTopic =
-      document.getElementById("nf-initial-data")?.getAttribute("data-initial-topic") ??
-      "datacenter";
-
-    for (const [topic, payload] of Object.entries(initialData.payloads)) {
-      const state = stateFor(topic);
-      if (payload.errorMessage) {
-        state.lastFetchError = payload.errorMessage;
-      } else {
-        mergeItems(topic, payload.newsItems);
-        // Dates the build-time snapshot. If the refresh below then fails, this
-        // is what the banner reports — and on a site deployed days ago that is
-        // exactly the number a reader needs to see.
-        state.lastStoredAt = payload.storedAt;
-        if (payload.truncated) state.windowNotice.set(currentDays, "cap");
-        else if (payload.partial) state.windowNotice.set(currentDays, "partial");
-      }
+    // Seed the shared pool with whatever the server already fetched for
+    // the initial (default) range, so it's not lost if the user switches
+    // away and back.
+    articleCache = new Map();
+    lastFetchError = null;
+    degraded = false;
+    lastStoredAt = null;
+    windowNotice.clear();
+    const initialPayload = readInitialPayload();
+    notices = initialPayload.notices ?? { cap: "", partial: "" };
+    if (initialPayload.errorMessage) {
+      lastFetchError = initialPayload.errorMessage;
+    } else {
+      mergeItems(initialPayload.newsItems);
+      // Dates the build-time snapshot. If the refresh below then fails, this is
+      // what the banner reports — and on a site deployed days ago that is
+      // exactly the number a reader needs to see.
+      lastStoredAt = initialPayload.storedAt;
+      if (initialPayload.truncated) windowNotice.set(currentDays, "cap");
+      else if (initialPayload.partial)
+        windowNotice.set(currentDays, "partial");
     }
-
-    const initialPayload = initialData.payloads[currentTopic];
     renderTicker(
-      initialPayload?.errorMessage ? [] : (initialPayload?.newsItems ?? []),
+      initialPayload.errorMessage ? [] : initialPayload.newsItems,
     );
 
     const toggleBtn = document.getElementById(
@@ -1054,23 +901,6 @@ const RANGE_OPTIONS = [
       newsCleanups.push(() => btn.removeEventListener("click", onClick));
     });
     updateRangeButtons(root);
-
-    // Switching topic keeps the reader's chosen window (7D stays 7D) rather
-    // than resetting to a default — the range is a separate, orthogonal
-    // choice and a click on "Surveillance" has no reason to also discard it.
-    const topicButtons = root.querySelectorAll<HTMLButtonElement>(".nf-topic-btn");
-    topicButtons.forEach((btn) => {
-      const onClick = () => {
-        const topic = btn.dataset.topic;
-        if (topic && topic !== currentTopic) {
-          showRange(root, currentDays, { topic });
-        }
-      };
-      btn.addEventListener("click", onClick);
-      newsCleanups.push(() => btn.removeEventListener("click", onClick));
-    });
-    updateTopicButtons(root);
-    updateTopicHeader();
 
     desktopMql = window.matchMedia(DESKTOP_MEDIA_QUERY);
 
@@ -1203,7 +1033,7 @@ const RANGE_OPTIONS = [
     // live results match the snapshot, and a visible reload for no visible
     // change is just noise.
     const hasPaintedItems =
-      !!initialPayload && !initialPayload.errorMessage && initialPayload.newsItems.length > 0;
+      !initialPayload.errorMessage && initialPayload.newsItems.length > 0;
     void showRange(root, currentDays, { silent: hasPaintedItems });
   }
 
