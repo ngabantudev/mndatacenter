@@ -135,20 +135,27 @@ const lastUpdated = new Date().toLocaleDateString("en-US", {
       holdCount={holdCount}
     />
 
-    <FilterLayer group="climate">
-      <!-- Legacy pollution sources — a hand-sourced registry, not a PMTiles
-           archive, so it rides in this group's slot the same way
-           FilterMoratorium.astro rides in Politics' below. See
-           research/facility-pins-spec.md §2.6. -->
-      <FilterFacilities />
-    </FilterLayer>
+    <FilterLayer group="climate" />
 
-    <!-- What a site would sit on top of, and then who decides whether it does.
-         The moratorium layer rides in the Politics section's slot: it is the
-         same question the city boundaries raise ("whose council?") with the
-         answer that council has already given. -->
+    <!-- What a site would sit on top of, and then who decides whether it does,
+         and then who else nearby is already a documented pollution source —
+         three different questions, three groups. The moratorium layer rides
+         in the Politics section's slot: it is the same question the city
+         boundaries raise ("whose council?") with the answer that council has
+         already given. -->
     <FilterLayer group="politics">
       <FilterMoratorium />
+    </FilterLayer>
+
+    <!-- Legacy pollution sources — a hand-sourced registry, not a PMTiles
+         archive, so it rides in this group's own slot the same way
+         FilterMoratorium.astro rides in Politics' above. Its own top-level
+         group, not folded into Climate & Regional Impacts: comparison
+         context ("who else pollutes, for scale"), not a thing a data center
+         site sits on top of. See research/facility-pins-spec.md §2.6 for the
+         original placement and this file's own history for why it moved. -->
+    <FilterLayer group="pollution">
+      <FilterFacilities />
     </FilterLayer>
 
     <FilterProject largestProjects={largestProjects} />

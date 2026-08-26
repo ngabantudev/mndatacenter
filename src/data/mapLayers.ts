@@ -17,13 +17,19 @@ import { indexBy } from '~/lib/collections';
 /**
  * Which sidebar section an overlay belongs to.
  *
- * Not cosmetic grouping: the two answer different questions. A climate layer
+ * Not cosmetic grouping: each answers a different question. A climate layer
  * says what a site would sit on top of; a politics layer says who decides
- * whether it gets built there and what they have decided so far. Someone
- * looking for the second was previously having to read past four environmental
- * datasets to find "City Boundaries".
+ * whether it gets built there and what they have decided so far; a pollution
+ * layer says who else nearby is already a documented pollution source, for
+ * scale — not a thing a data center sits on, not a decision-maker, but
+ * comparison context. Someone looking for the second used to have to read
+ * past four environmental datasets to find "City Boundaries"; the same
+ * problem was starting for the third, since "Facilities" (legacy pollution
+ * sources — see research/facility-pins-spec.md) isn't really either of the
+ * other two things and was sitting inside `climate` only because that's
+ * where it was first built, not because it belonged there.
  */
-export type MapLayerGroup = 'climate' | 'politics';
+export type MapLayerGroup = 'climate' | 'politics' | 'pollution';
 
 /**
  * Accordion heading per group. A total `Record` rather than the array-plus-
@@ -33,6 +39,7 @@ export type MapLayerGroup = 'climate' | 'politics';
  */
 export const MAP_LAYER_GROUP_TITLE: Record<MapLayerGroup, string> = {
   climate: 'Climate & Regional Impacts',
+  pollution: 'Pollution Sources',
   politics: 'Politics',
 };
 

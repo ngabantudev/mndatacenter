@@ -1,13 +1,17 @@
 ---
 // src/components/filter/FilterFacilities.astro
 //
-// The Climate & Regional Impacts section's "Facilities" row — Minnesota's
-// largest documented pollution sources (`~/data/mnPollutionFacilities.ts`),
-// off by default, expanding to one checkbox per sector once switched on
+// The Pollution Sources section's one row — Minnesota's largest documented
+// pollution sources (`~/data/mnPollutionFacilities.ts`), off by default,
+// expanding to one checkbox per sector once switched on
 // (research/facility-pins-spec.md §2.6). Rendered into `FilterLayer.astro`'s
-// existing `<slot />` for `group="climate"`, the same mechanism
-// `FilterMoratorium.astro` already uses for the Politics group — see
-// MapFilterParent.astro for the composition point.
+// `<slot />` for `group="pollution"`, the same mechanism `FilterMoratorium.astro`
+// uses for the Politics group — see MapFilterParent.astro for the composition
+// point. Originally built inside `group="climate"`'s slot; moved to its own
+// top-level group because "who else nearby already pollutes, for comparison"
+// isn't the same question Climate & Regional Impacts answers ("what would a
+// site sit on top of") — see `~/data/mapLayers.ts`'s `MapLayerGroup` doc
+// comment for the three-way distinction.
 //
 // It is not an `.environmental-layer-toggle`: those are PMTiles archives with
 // an unavailable/reload lifecycle this layer structurally cannot have (it's a
