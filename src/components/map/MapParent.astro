@@ -132,6 +132,22 @@ const news = await fetchLocalNews();
     MORATORIUM_TINT,
   } from "~/lib/moratoriumLayer";
   import {
+    buildFacilityDetailHtml,
+    buildFacilityHoverHtml,
+    facilityById,
+    facilityForFeature,
+    FACILITY_API_KEY,
+    FACILITY_GEOJSON,
+    FACILITY_LAYER_ID,
+    FACILITY_LIST_SELECT_EVENT,
+    FACILITY_OPACITY_EXPR,
+    FACILITY_RADIUS_EXPR,
+    FACILITY_SECTORS_API_KEY,
+    FACILITY_SOURCE_ID,
+    sectorColorExpr,
+  } from "~/lib/facilityMarkers";
+  import { POLLUTION_FACILITY_SECTORS } from "~/data/mnPollutionFacilities";
+  import {
     protectedLandForFeature,
     protectedLandPopupHtml,
     type ProtectedLand,
@@ -530,6 +546,16 @@ const news = await fetchLocalNews();
 
     let criteria: FilterCriteria = { ...DEFAULT_CRITERIA };
 
+    // --- Facility pins (legacy pollution sources) ---
+    //
+    // Off by default (spec §2, done criterion 1). `facilitySectors` holds
+    // whichever sectors' sub-checkboxes are currently checked in
+    // FilterFacilities.astro — an empty layer with the master box checked is
+    // a legitimate state (spec §5's "sub-toggle filters to zero facilities"),
+    // not a bug, so this starts as every known sector rather than none.
+    let facilitiesWanted = false;
+    let facilitySectors: string[] = [...POLLUTION_FACILITY_SECTORS];
+
     // Everything about the PMTiles overlays — reading each archive, adding its
     // fill and borders, switching it on and off, naming the
     // region under the cursor — lives in ~/lib/overlayLayers.ts. It used to be
@@ -745,6 +771,42 @@ const news = await fetchLocalNews();
         } as maplibregl.SymbolLayerSpecification);
       }
 
+      // Facility pins: a separate GeoJSON source, never `MARKER_SOURCE_ID`
+      // (spec §2.1/§2.4) — every basemap swap rebuilds this source and layer
+      // from scratch the same as the project markers above, so the sector
+      // color expression is re-resolved against whichever basemap just
+      // loaded (`isMapStyleDark(currentStyleId)`) rather than going stale.
+      if (!map.getSource(FACILITY_SOURCE_ID)) {
+        map.addSource(FACILITY_SOURCE_ID, {
+          type: "geojson",
+          data: FACILITY_GEOJSON,
+          generateId: true,
+        });
+      }
+      if (!map.getLayer(FACILITY_LAYER_ID)) {
+        // Inserted beneath the project layers, not on top of them: a
+        // co-located facility and data center site should never have the
+        // pollution pin visually cover the project marker it sits next to.
+        const beforeProject = PROJECT_LAYER_IDS.find((id) => map.getLayer(id));
+        map.addLayer(
+          {
+            id: FACILITY_LAYER_ID,
+            type: "circle",
+            source: FACILITY_SOURCE_ID,
+            layout: { visibility: "none" },
+            paint: {
+              "circle-color": sectorColorExpr(isMapStyleDark(currentStyleId)) as any,
+              "circle-radius": FACILITY_RADIUS_EXPR as any,
+              "circle-stroke-width": 1.5,
+              "circle-stroke-color": "#ffffff",
+              "circle-opacity": FACILITY_OPACITY_EXPR as any,
+            },
+          } as maplibregl.CircleLayerSpecification,
+          beforeProject,
+        );
+      }
+      applyFacilityFilters();
+
       applyMapFilters();
       // Both of these insert beneath the layers just added, so they go on
       // after them — and again after every basemap swap, since `setStyle`
@@ -752,6 +814,24 @@ const news = await fetchLocalNews();
       // to sit under its dots.
       moratoriums.attachToStyle();
       overlays.attachToStyle();
+    };
+
+    /** Brings the facility layer's visibility + sector filter in line with
+     *  `facilitiesWanted`/`facilitySectors` — called from `addDataLayer` (a
+     *  fresh layer after a basemap swap opens hidden, per the master
+     *  checkbox's own state) and from the `mapfilterchange` handler below. */
+    const applyFacilityFilters = (): void => {
+      if (!map.getLayer(FACILITY_LAYER_ID)) return;
+      map.setLayoutProperty(
+        FACILITY_LAYER_ID,
+        "visibility",
+        facilitiesWanted ? "visible" : "none",
+      );
+      map.setFilter(FACILITY_LAYER_ID, [
+        "in",
+        ["get", "sector"],
+        ["literal", facilitySectors],
+      ] as any);
     };
 
     map.on("load", () => {
@@ -829,6 +909,18 @@ const news = await fetchLocalNews();
         overlays.setVisible(CITY_BOUNDARIES_LAYER_ID, showMoratoriums);
         moratoriums.setVisible(showMoratoriums);
         overlays.setCompanionVisible(MORATORIUM_TINT.id, showMoratoriums);
+      }
+
+      // Facility pins: the master checkbox and the sector sub-checkboxes are
+      // two independent keys on the same event (FilterFacilities.astro sends
+      // both together on every change) — see facilityMarkers.ts's header note
+      // on why this isn't folded into MAP_LAYER_META's loop above.
+      const showFacilities = detail[FACILITY_API_KEY];
+      if (typeof showFacilities === "boolean") facilitiesWanted = showFacilities;
+      const sectors = detail[FACILITY_SECTORS_API_KEY];
+      if (Array.isArray(sectors)) facilitySectors = sectors as string[];
+      if (typeof showFacilities === "boolean" || Array.isArray(sectors)) {
+        applyFacilityFilters();
       }
 
       applyMapFilters();
@@ -958,6 +1050,100 @@ const news = await fetchLocalNews();
         new CustomEvent("mapmarkerselect", { detail: { project } }),
       );
     });
+
+    // --- Facility pin hover/click ---
+    //
+    // Direct layer-scoped handlers, the same shape as the project marker
+    // handlers just above rather than routed through `hitTest` below: that
+    // system exists to arbitrate between several PMTiles/moratorium hit
+    // targets sharing one `queryRenderedFeatures` call, which doesn't apply
+    // here — this is one circle layer, same as `MARKER_LAYER_ID`.
+    let facilityHoverPopup: maplibregl.Popup | null = null;
+
+    const closeFacilityHoverPopup = (): void => {
+      facilityHoverPopup?.remove();
+      facilityHoverPopup = null;
+    };
+
+    map.on("mouseenter", FACILITY_LAYER_ID, (e) => {
+      map.getCanvas().style.cursor = "pointer";
+      if (isPhone() || !e.features || e.features.length === 0) return;
+      const facility = facilityForFeature(e.features[0]);
+      if (!facility) return;
+      closeFacilityHoverPopup();
+      facilityHoverPopup = new maplibregl.Popup({
+        closeButton: false,
+        offset: 12,
+        maxWidth: "224px",
+      })
+        .setLngLat(e.features[0].geometry.coordinates as [number, number])
+        .setHTML(buildFacilityHoverHtml(facility))
+        .addTo(map);
+    });
+
+    map.on("mouseleave", FACILITY_LAYER_ID, () => {
+      map.getCanvas().style.cursor = "";
+      closeFacilityHoverPopup();
+    });
+
+    /** Opens the full sourced-metric record for one facility — the same card
+     *  whether reached by clicking its pin or activating it from the
+     *  accessible list (see the `FACILITY_LIST_SELECT_EVENT` listener
+     *  below). */
+    const openFacilityDetail = (
+      facility: ReturnType<typeof facilityForFeature>,
+      coords: [number, number],
+    ): void => {
+      if (!facility) return;
+      closeFacilityHoverPopup();
+      if (activePopup) activePopup.remove();
+      new maplibregl.Popup({
+        closeButton: true,
+        maxWidth: "320px",
+        // Same treatment the moratorium/protected-lands click-through record
+        // uses — a persistent card the reader dismisses themselves.
+        className: "map-record-popup",
+      })
+        .setLngLat(coords)
+        .setHTML(buildFacilityDetailHtml(facility))
+        .addTo(map);
+    };
+
+    map.on("click", FACILITY_LAYER_ID, (e) => {
+      if (!e.features || e.features.length === 0) return;
+      openFacilityDetail(
+        facilityForFeature(e.features[0]),
+        e.features[0].geometry.coordinates as [number, number],
+      );
+    });
+
+    /** Is this point on a facility pin? Same shape as `isMarkerAt` above, and
+     *  asked for the same reason: the map-wide click handler further down has
+     *  to yield to this layer's own handler rather than dispatch a deselect
+     *  right behind it. */
+    const isFacilityAt = (point: maplibregl.Point): boolean =>
+      !!map.getLayer(FACILITY_LAYER_ID) &&
+      map.queryRenderedFeatures(point, { layers: [FACILITY_LAYER_ID] }).length > 0;
+
+    // The accessible DOM record list's activation path (FilterFacilities.astro)
+    // — keyboard/screen-reader equivalent of clicking a pin. Resolved through
+    // `facilityById`, never through `clientProjects` (see FACILITY_LIST_SELECT_EVENT's
+    // own doc comment on why the two event payloads must never be confused).
+    const handleFacilityListSelect = (event: Event) => {
+      const detail = (event as CustomEvent<{ facilityId: string } | null>).detail;
+      const facility = detail?.facilityId ? facilityById(detail.facilityId) : null;
+      if (!facility) return;
+      const coords: [number, number] = [
+        facility.coordinates[1],
+        facility.coordinates[0],
+      ];
+      map.flyTo({ center: coords, zoom: Math.max(map.getZoom(), 10), essential: true });
+      openFacilityDetail(facility, coords);
+    };
+    document.addEventListener(FACILITY_LIST_SELECT_EVENT, handleFacilityListSelect);
+    mapCleanups.push(() =>
+      document.removeEventListener(FACILITY_LIST_SELECT_EVENT, handleFacilityListSelect),
+    );
 
     // --- Overlay hover/tap labels ---
     //
@@ -1183,8 +1369,10 @@ const news = await fetchLocalNews();
     map.on("click", (e) => {
       // The marker's own handler owns this tap. Tested directly rather than
       // through `hitTest`, which cannot see markers while every overlay is off
-      // — see `isMarkerAt`.
-      if (isMarkerAt(e.point)) return;
+      // — see `isMarkerAt`. Facility pins are the same case: their own click
+      // handler already opened (or will open) the record; this handler must
+      // not also dispatch a deselect behind it.
+      if (isMarkerAt(e.point) || isFacilityAt(e.point)) return;
 
       const hit = hitTest(e.point);
 
