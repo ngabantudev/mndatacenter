@@ -458,13 +458,11 @@ export const FACILITY_ICON_HALO_WIDTH = 2;
 export const FACILITY_ICON_HALO_COLOR = '#ffffff';
 
 /** Padding, in px, the ring/hit-circle extends beyond the icon's own
- *  rendered edge — a snug ring would clip the icon's halo; this leaves it
- *  room to breathe and keeps the tap target slightly larger than the glyph
- *  itself. Pulled in one step (was 4) per direct request ("rings one size
- *  smaller") — this only tightens the ring's own gap around the icon; it
- *  does not affect icon size, which is a separate, independently-adjusted
- *  quantity now that the two are no longer coupled the way they used to be. */
-const FACILITY_RING_PADDING_PX = 2;
+ *  rendered edge. Pulled in twice now on direct request (was 4, then 2) —
+ *  at 0 the ring sits right at the icon's own edge rather than floating
+ *  outside it; the hit-test target this same radius drives stays exactly
+ *  the icon's own footprint, no larger. */
+const FACILITY_RING_PADDING_PX = 0;
 
 /** The ring around each icon (this layer's `circle-stroke-*` paint, set in
  *  MapParent.astro) AND the hit-test target's radius — both driven by this

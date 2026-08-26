@@ -839,7 +839,11 @@ const news = await fetchLocalNews();
               "circle-radius": FACILITY_RADIUS_EXPR as any,
               "circle-opacity": 0,
               "circle-stroke-color": sectorColorExpr(isMapStyleDark(currentStyleId)) as any,
-              "circle-stroke-width": 2.5,
+              // Thinner than the first pass (2.5) alongside pulling the
+              // ring's padding to 0 in facilityMarkers.ts — "make the ring
+              // smaller" read as both a smaller radius AND a lighter,
+              // less-prominent line, not just tighter at the same weight.
+              "circle-stroke-width": 1.5,
               "circle-stroke-opacity": FACILITY_OPACITY_EXPR as any,
             },
           } as maplibregl.CircleLayerSpecification,
