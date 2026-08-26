@@ -109,12 +109,18 @@ const QD_VALUES = TRI_TOP_FACILITIES.map((row) => row.cumulativeQD);
 const QD_MIN = Math.min(...QD_VALUES);
 const QD_MAX = Math.max(...QD_VALUES);
 
-const FACILITY_MIN_R = 5;
-const FACILITY_MAX_R = 20;
+// These also size the invisible hit-test circle (see MapParent.astro's
+// FACILITY_LAYER_ID) — with the icon now the only visible thing on a
+// facility pin, and noticeably bigger than an earlier pass per direct
+// request, the tap target has to grow to match it. Otherwise a reader
+// tapping the visible icon lands outside a smaller invisible hit circle
+// underneath it.
+const FACILITY_MIN_R = 12;
+const FACILITY_MAX_R = 27;
 /** Fixed radius for a facility with no cumulativeQD row — visibly smaller
  *  than even the lowest-ranked real score, and paired with reduced opacity
  *  (see `FACILITY_NO_QD_OPACITY`) so it reads as "no data," not "tiny." */
-const FACILITY_FALLBACK_R = 4;
+const FACILITY_FALLBACK_R = 11;
 const FACILITY_NO_QD_OPACITY = 0.45;
 const FACILITY_OPACITY = 0.88;
 
@@ -436,18 +442,19 @@ export const FACILITY_ICON_EXPR: unknown[] = [
  *  old circle radius used (`FACILITY_RADIUS_EXPR` already resolves the
  *  hasQD/fallback split), remapped to a render-size floor/ceiling picked so
  *  even the smallest, bold, one-or-two-shape glyphs this file draws stay
- *  legible: ~15px across at the low end, ~34px at the high end
- *  (ICON_CANVAS_PX=24 × icon-size). */
+ *  legible: ~24px across at the low end, ~54px at the high end
+ *  (ICON_CANVAS_PX=24 × icon-size) — bumped up from an initial ~15–34px
+ *  pass per direct request for noticeably larger pins. */
 export const FACILITY_ICON_SIZE_EXPR: unknown[] = [
   'interpolate',
   ['linear'],
   FACILITY_RADIUS_EXPR,
   FACILITY_FALLBACK_R,
-  0.62,
+  1.0,
   FACILITY_MIN_R,
-  0.7,
+  1.12,
   FACILITY_MAX_R,
-  1.4,
+  2.25,
 ];
 
 /** Icon-halo width/color — this is the icon layer's replacement for the old
