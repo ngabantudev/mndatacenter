@@ -109,40 +109,20 @@ const QD_VALUES = TRI_TOP_FACILITIES.map((row) => row.cumulativeQD);
 const QD_MIN = Math.min(...QD_VALUES);
 const QD_MAX = Math.max(...QD_VALUES);
 
-// These also size the invisible hit-test circle (see MapParent.astro's
-// FACILITY_LAYER_ID) — with the icon now the only visible thing on a
-// facility pin, and noticeably bigger than an earlier pass per direct
-// request, the tap target has to grow to match it. Otherwise a reader
-// tapping the visible icon lands outside a smaller invisible hit circle
-// underneath it.
-const FACILITY_MIN_R = 12;
-const FACILITY_MAX_R = 27;
-/** Fixed radius for a facility with no cumulativeQD row — visibly smaller
- *  than even the lowest-ranked real score, and paired with reduced opacity
- *  (see `FACILITY_NO_QD_OPACITY`) so it reads as "no data," not "tiny." */
-const FACILITY_FALLBACK_R = 11;
+// THE ICON IS THE PRIMARY QUANTITY NOW, NOT THE RING. This used to be the
+// other way around — `FACILITY_ICON_SIZE_EXPR` was computed FROM this
+// radius, using its own independently-tuned output range, which meant every
+// time icon size changed (four rounds of direct size feedback in a row) this
+// radius had to be hand-updated to match or the ring/hit-circle drifted out
+// of sync with what the icon actually looked like — exactly the bug class
+// flagged and then found in review. Fixed by breaking the dependency
+// direction: `FACILITY_ICON_SIZE_EXPR` (below, in the icon section) is now
+// computed directly from cumulativeQD, and THIS radius is derived FROM that
+// icon size (half its rendered pixel width, plus a fixed padding) — so the
+// ring can never drift from the icon again, by construction, not by
+// discipline.
 const FACILITY_NO_QD_OPACITY = 0.45;
 const FACILITY_OPACITY = 0.88;
-
-/** Same interpolation shape as MapParent's `radiusExpr`, on the Q/D domain. */
-const qdRadiusExpr: unknown[] = [
-  'interpolate',
-  ['linear'],
-  ['sqrt', ['get', 'cumulativeQD']],
-  Math.sqrt(QD_MIN),
-  FACILITY_MIN_R,
-  Math.sqrt(QD_MAX),
-  FACILITY_MAX_R,
-];
-
-/** Circle radius: the interpolation above where a Q/D score exists, the fixed
- *  fallback where it doesn't. */
-export const FACILITY_RADIUS_EXPR: unknown[] = [
-  'case',
-  ['==', ['get', 'hasQD'], true],
-  qdRadiusExpr,
-  FACILITY_FALLBACK_R,
-];
 
 export const FACILITY_OPACITY_EXPR: unknown[] = [
   'case',
@@ -439,35 +419,35 @@ export const FACILITY_ICON_EXPR: unknown[] = [
   FALLBACK_ICON_ID,
 ];
 
-/** Icon size. The icon IS the pin now — there's no colored circle behind it
- *  to fall back on — so unlike the size expression this replaced, it must
- *  never reach 0: every facility stays visible and tappable regardless of
- *  its Q/D rank. Interpolated on the same `FACILITY_RADIUS_EXPR` domain the
- *  old circle radius used (`FACILITY_RADIUS_EXPR` already resolves the
- *  hasQD/fallback split).
- *
- *  ~6px across at the low end, ~13px at the high end (ICON_CANVAS_PX=24 ×
- *  icon-size) — two steps below "back to the original pass's size" (~15–34px,
- *  itself already documented in this file's history as roughly the floor
- *  for these bold one-or-two-shape glyphs to read as anything but noise),
- *  per a direct "two sizes smaller" request following that reversion. Flagged
- *  to the requester rather than silently applied: this is smaller than the
- *  size this same file previously called the legibility floor. If the icons
- *  read as blobs at this size, that's the reason — the fix is sizing back
- *  up, not redrawing the glyphs. The stroke weights and icon halo width
- *  (`FACILITY_ICON_HALO_WIDTH`) were NOT reduced to match — only size was
- *  asked for — so a fixed 2px halo may now look thick relative to a ~6–13px
- *  glyph; a separate, likely-needed follow-up if so. */
-export const FACILITY_ICON_SIZE_EXPR: unknown[] = [
+/** Icon-size multipliers (rendered px = ICON_CANVAS_PX × value). Undone back
+ *  to the "one size smaller" pass — the "two sizes smaller" step past that
+ *  (rendering ~6–13px, below this file's own documented ~15px legibility
+ *  floor for these glyphs) was reverted on direct request ("whoa undo
+ *  that"). ~15px across at the low end, ~34px at the high end. */
+const ICON_SIZE_FALLBACK = 0.62;
+const ICON_SIZE_MIN = 0.7;
+const ICON_SIZE_MAX = 1.4;
+
+/** Icon size, computed directly from cumulativeQD/hasQD — the primary
+ *  quantity now, not derived from a separately-tuned radius. THE icon is
+ *  the pin (there's no colored circle behind it to fall back on), so unlike
+ *  the size expression this replaced, it must never reach 0: every facility
+ *  stays visible and tappable regardless of its Q/D rank. */
+const qdIconSizeExpr: unknown[] = [
   'interpolate',
   ['linear'],
-  FACILITY_RADIUS_EXPR,
-  FACILITY_FALLBACK_R,
-  0.24,
-  FACILITY_MIN_R,
-  0.27,
-  FACILITY_MAX_R,
-  0.55,
+  ['sqrt', ['get', 'cumulativeQD']],
+  Math.sqrt(QD_MIN),
+  ICON_SIZE_MIN,
+  Math.sqrt(QD_MAX),
+  ICON_SIZE_MAX,
+];
+
+export const FACILITY_ICON_SIZE_EXPR: unknown[] = [
+  'case',
+  ['==', ['get', 'hasQD'], true],
+  qdIconSizeExpr,
+  ICON_SIZE_FALLBACK,
 ];
 
 /** Icon-halo width/color — this is the icon layer's replacement for the old
@@ -477,6 +457,30 @@ export const FACILITY_ICON_SIZE_EXPR: unknown[] = [
  *  regardless of theme. */
 export const FACILITY_ICON_HALO_WIDTH = 2;
 export const FACILITY_ICON_HALO_COLOR = '#ffffff';
+
+/** Padding, in px, the ring/hit-circle extends beyond the icon's own
+ *  rendered edge — a snug ring would clip the icon's halo; this leaves it
+ *  room to breathe and keeps the tap target slightly larger than the glyph
+ *  itself. */
+const FACILITY_RING_PADDING_PX = 4;
+
+/** The ring around each icon (this layer's `circle-stroke-*` paint, set in
+ *  MapParent.astro) AND the hit-test target's radius — both driven by this
+ *  one expression, which is now derived directly FROM the icon's own
+ *  rendered size (`FACILITY_ICON_SIZE_EXPR`) rather than an independently
+ *  tuned number. Per direct request ("the rings should be dynamic to the
+ *  size of the icons"): this used to be the other way around — icon size
+ *  was computed from this radius, using its own separate output range —
+ *  which meant every icon-size change (four rounds of direct feedback in a
+ *  row) required hand-updating this radius to match too, or the ring/hit
+ *  circle silently drifted out of sync with what the icon actually looked
+ *  like. Now it can't drift, by construction: half the icon's rendered
+ *  pixel width, plus a fixed padding. */
+export const FACILITY_RADIUS_EXPR: unknown[] = [
+  '+',
+  ['*', ICON_CANVAS_PX / 2, FACILITY_ICON_SIZE_EXPR],
+  FACILITY_RING_PADDING_PX,
+];
 
 // ---------------------------------------------------------------------------
 // The GeoJSON source. Built once at module scope — this registry is fixed for
