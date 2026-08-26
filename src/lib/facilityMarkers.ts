@@ -74,6 +74,19 @@ export const FACILITY_SECTORS_API_KEY = 'facilitySectors';
  */
 export const FACILITY_LIST_SELECT_EVENT = 'facilitylistselect';
 
+/**
+ * Dispatched by MapParent.astro's own click/hover controller — and by the
+ * `FACILITY_LIST_SELECT_EVENT` handler above, so both paths converge here —
+ * to open FacilityDetailParent.astro's persistent panel. Carries
+ * `{ facility: PollutionFacility } | null`, `null` closing the panel, the
+ * same shape `mapmarkerselect` uses for `Project`. Named apart from
+ * `mapmarkerselect` for the exact reason `FACILITY_LIST_SELECT_EVENT` is:
+ * that event carries a `Project` and this one must never be mistaken for it
+ * (spec §2.1) — FacilityDetailParent.astro resolves this payload as a
+ * `PollutionFacility`, never as a `Project`.
+ */
+export const FACILITY_MARKER_SELECT_EVENT = 'facilitymarkerselect';
+
 // ---------------------------------------------------------------------------
 // Sizing: cumulativeQD, joined by facilityId, sqrt-scaled like the project
 // markers (so *area*, not radius, tracks the score) but on its own domain and

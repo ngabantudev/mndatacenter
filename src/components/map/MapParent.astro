@@ -4,6 +4,7 @@ import { fetchLocalNews } from "~/lib/newsFeed";
 import MapFilterParent from "~/components/map/MapFilterParent.astro";
 import NewsFeedParent from "../news/NewsFeedParent.astro";
 import MapDetailParent from "~/components/map/MapDetailParent.astro";
+import FacilityDetailParent from "~/components/map/FacilityDetailParent.astro";
 import MapDetailCta from "~/components/map/MapDetailCta.astro";
 import MapThemeSelector from "~/components/ui/MapThemeSelector.astro";
 import CampaignBanner from "~/components/campaign/CampaignBanner.astro";
@@ -26,6 +27,8 @@ const news = await fetchLocalNews();
   <MapFilterParent />
 
   <MapDetailParent />
+
+  <FacilityDetailParent />
 
   <!-- Renders the campaign block into a hidden host; the map script below
        moves that node into a popup over the selected marker. -->
@@ -132,7 +135,6 @@ const news = await fetchLocalNews();
     MORATORIUM_TINT,
   } from "~/lib/moratoriumLayer";
   import {
-    buildFacilityDetailHtml,
     buildFacilityHoverHtml,
     facilityById,
     facilityForFeature,
@@ -140,6 +142,7 @@ const news = await fetchLocalNews();
     FACILITY_GEOJSON,
     FACILITY_LAYER_ID,
     FACILITY_LIST_SELECT_EVENT,
+    FACILITY_MARKER_SELECT_EVENT,
     FACILITY_OPACITY_EXPR,
     FACILITY_RADIUS_EXPR,
     FACILITY_SECTORS_API_KEY,
@@ -1090,32 +1093,26 @@ const news = await fetchLocalNews();
       closeFacilityHoverPopup();
     });
 
-    /** Opens the full sourced-metric record for one facility — the same card
-     *  whether reached by clicking its pin or activating it from the
-     *  accessible list (see the `FACILITY_LIST_SELECT_EVENT` listener
-     *  below). */
+    /** Opens the full sourced-metric record for one facility — the same
+     *  persistent panel (FacilityDetailParent.astro) whether reached by
+     *  clicking its pin or activating it from the accessible list (see the
+     *  `FACILITY_LIST_SELECT_EVENT` listener below). Mirrors the data-center
+     *  flow: this dispatches `FACILITY_MARKER_SELECT_EVENT` on `document`
+     *  rather than building a popup itself — FacilityDetailParent.astro is
+     *  the sole listener that turns the payload into a rendered panel, the
+     *  same separation MapDetailParent.astro keeps from the project marker's
+     *  own click handler. `coords` is accepted for parity with the
+     *  accessible-list caller's flyTo, unused by the panel itself. */
     const openFacilityDetail = (
       facility: ReturnType<typeof facilityForFeature>,
-      coords: [number, number],
+      _coords: [number, number],
     ): void => {
       if (!facility) return;
       closeFacilityHoverPopup();
       if (activePopup) activePopup.remove();
-      new maplibregl.Popup({
-        closeButton: true,
-        // buildFacilityDetailHtml's card is `w-full` (w-80/320px used to be
-        // fixed here), so it exactly fills whatever this leaves after the
-        // popup's own 16px padding each side — same fix as #59, applied here
-        // too since the same fixed-width-inside-maxWidth bug clipped this
-        // card's content on the right.
-        maxWidth: "352px",
-        // Same treatment the moratorium/protected-lands click-through record
-        // uses — a persistent card the reader dismisses themselves.
-        className: "map-record-popup",
-      })
-        .setLngLat(coords)
-        .setHTML(buildFacilityDetailHtml(facility))
-        .addTo(map);
+      document.dispatchEvent(
+        new CustomEvent(FACILITY_MARKER_SELECT_EVENT, { detail: { facility } }),
+      );
     };
 
     map.on("click", FACILITY_LAYER_ID, (e) => {
@@ -1387,6 +1384,12 @@ const news = await fetchLocalNews();
 
       document.dispatchEvent(
         new CustomEvent("mapmarkerselect", { detail: null }),
+      );
+      // Same deselect, for the facility panel — a click on empty map has to
+      // close whichever of the two persistent panels happens to be open,
+      // and only one of them can be for a given click.
+      document.dispatchEvent(
+        new CustomEvent(FACILITY_MARKER_SELECT_EVENT, { detail: null }),
       );
 
       if (hit.kind === "moratorium" || hit.kind === "protected") {

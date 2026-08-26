@@ -1,0 +1,203 @@
+---
+// src/components/map/FacilityDetailParent.astro
+//
+// Full sourced-metric record for one pollution-source facility (see
+// `src/data/mnPollutionFacilities.ts` and research/facility-pins-spec.md),
+// opened when a facility pin is clicked or activated from
+// FilterFacilities.astro's accessible list. Listens for a
+// `facilitymarkerselect` CustomEvent on `document` with
+// `{ facility: PollutionFacility } | null` — `null` closes the panel.
+//
+// This is a sibling to MapDetailParent.astro, not a variant of it — see spec
+// §2.1: the facility layer is structurally separate from the `Project`
+// marker system, so its detail surface stays separate too, with its own DOM
+// root (`#facility-detail-panel`, not `#map-detail-panel`) and its own event
+// (`facilitymarkerselect`, not `mapmarkerselect`).
+//
+// NAMING NOTE: MapDetailParent.astro's own panel is headed "Facility Detail"
+// in its markup even though it renders a data-center `Project` — that label
+// predates this file and predates the real `PollutionFacility` concept. It
+// is left untouched (out of scope here per the task boundaries), but this
+// panel is titled "Documented Pollution Source" specifically so the two
+// panels never read as the same thing to a reader who has both open in
+// different tabs of memory.
+//
+// Layout is copied from MapDetailParent.astro's exact Tailwind recipe (right
+// sidebar on desktop, bottom sheet on mobile, the same `.band` header
+// treatment and open/close transition) so the two panels look and behave
+// identically without one importing or extending the other.
+import { Factory } from 'lucide-astro';
+---
+
+<!--
+  Starts `hidden`; `open()` swaps that for `flex` (see the script below).
+  Same flex-column reasoning as MapDetailParent.astro: without it,
+  `#fdp-content`'s `flex-1` resolves against nothing and a long record clips
+  instead of scrolling.
+-->
+<div
+  id="facility-detail-panel"
+  class="hidden pointer-events-auto font-sans absolute z-40
+         bottom-(--mobile-toolbar-h) inset-x-0 max-h-[78dvh] rounded-t-2xl translate-y-full
+         md:inset-x-auto md:top-0 md:bottom-0 md:right-0 md:left-auto md:w-96 md:max-h-none md:rounded-none md:translate-y-0 md:translate-x-full
+         bg-panel backdrop-blur-md border border-hair md:border-r-0
+         shadow-2xl shadow-(color:--shadow-panel) flex-col overflow-hidden transition-transform duration-300 ease-out"
+>
+  <div class="band bg-panel flex items-center gap-2.5 px-3.5 py-3 md:px-4 md:py-3.5 shrink-0 min-w-0 border-b border-hair">
+    <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-hover shrink-0">
+      <Factory size={14} stroke-width={2} class="text-accent" />
+    </div>
+    <div class="min-w-0 flex-1">
+      <h4 class="text-[9px] md:text-[10px] font-bold text-ink-4 uppercase tracking-wider leading-none whitespace-nowrap">
+        Documented Pollution Source
+      </h4>
+      <p id="fdp-title" class="text-[10.5px] md:text-[11.5px] font-semibold text-ink mt-1 leading-none truncate">
+        &nbsp;
+      </p>
+    </div>
+    <button
+      id="fdp-close"
+      type="button"
+      aria-label="Close facility record"
+      data-sheet-close
+      class="w-7 h-7 flex items-center justify-center rounded-full text-ink-3 hover:text-ink hover:bg-hover transition shrink-0 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    </button>
+  </div>
+
+  <!--
+    `buildFacilityDetailHtml`'s markup is static — links and badges, no
+    inputs or buttons — so unlike `#mdp-content` in MapDetailParent.astro
+    there is nothing here that needs rehydrating after the innerHTML swap.
+  -->
+  <div id="fdp-scroll" class="flex-1 min-h-0 overflow-y-auto p-3">
+    <div id="fdp-content"></div>
+  </div>
+</div>
+
+<script>
+  import { onReady } from '~/lib/domReady';
+  import {
+    buildFacilityDetailHtml,
+    FACILITY_MARKER_SELECT_EVENT,
+  } from '~/lib/facilityMarkers';
+  import type { PollutionFacility } from '~/data/mnPollutionFacilities';
+
+  // Same re-init/cleanup shape as MapDetailParent.astro's `detailCleanups` —
+  // `onReady` re-runs after every Astro navigation, and the listeners below
+  // are on `document`, which outlives one run.
+  let facilityDetailCleanups: (() => void)[] = [];
+
+  function initFacilityDetailPanel(): void {
+    const panel = document.getElementById('facility-detail-panel');
+    const scroller = document.getElementById('fdp-scroll');
+    const content = document.getElementById('fdp-content');
+    const closeBtn = document.getElementById('fdp-close');
+    const titleEl = document.getElementById('fdp-title');
+    if (!panel || !content || !scroller) return;
+
+    while (facilityDetailCleanups.length > 0) {
+      facilityDetailCleanups.pop()?.();
+    }
+
+    // Same overlapping-open/close guard as MapDetailParent.astro's
+    // `hideTimer` — selecting a second facility (or a project) within 300ms
+    // of a deselect must not let the first close land on the panel the
+    // second selection just opened.
+    let hideTimer: number | null = null;
+
+    const cancelHide = (): void => {
+      if (hideTimer === null) return;
+      window.clearTimeout(hideTimer);
+      hideTimer = null;
+    };
+    facilityDetailCleanups.push(cancelHide);
+
+    function open(facility: PollutionFacility): void {
+      cancelHide();
+      // Mutual exclusion (spec-adjacent task requirement, not in
+      // facility-pins-spec.md itself): both panels dock to the same screen
+      // position, so opening this one has to close the data-center detail
+      // panel. Dispatching `mapmarkerselect: null` rather than reaching into
+      // MapDetailParent.astro is the same arm's-length mechanism
+      // MobileToolbar.astro already uses to close that panel from outside
+      // its own file.
+      document.dispatchEvent(new CustomEvent('mapmarkerselect', { detail: null }));
+      content!.innerHTML = buildFacilityDetailHtml(facility);
+      if (titleEl) titleEl.textContent = facility.name;
+      panel!.classList.remove('hidden');
+      panel!.classList.add('flex');
+      scroller!.scrollTop = 0;
+      requestAnimationFrame(() => {
+        panel!.classList.remove('translate-y-full', 'md:translate-x-full');
+      });
+    }
+
+    function close(): void {
+      panel!.classList.add('translate-y-full', 'md:translate-x-full');
+      cancelHide();
+      hideTimer = window.setTimeout(() => {
+        hideTimer = null;
+        panel!.classList.add('hidden');
+        panel!.classList.remove('flex');
+      }, 300);
+      if (titleEl) titleEl.textContent = ' ';
+    }
+
+    const onFacilityMarkerSelect = (event: Event) => {
+      const detail = (event as CustomEvent<{ facility: PollutionFacility } | null>).detail;
+      if (detail?.facility) {
+        open(detail.facility);
+      } else {
+        close();
+      }
+    };
+    document.addEventListener(FACILITY_MARKER_SELECT_EVENT, onFacilityMarkerSelect);
+    facilityDetailCleanups.push(() =>
+      document.removeEventListener(FACILITY_MARKER_SELECT_EVENT, onFacilityMarkerSelect),
+    );
+
+    // The other half of mutual exclusion: a data-center marker being
+    // selected (or deliberately deselected) while this panel is open must
+    // close this one too, without this file touching mapMarkers.ts or
+    // MapDetailParent.astro — it only listens for the event they already
+    // dispatch.
+    const onMarkerSelect = (event: Event) => {
+      const detail = (event as CustomEvent<{ project: unknown } | null>).detail;
+      if (detail?.project && !panel!.classList.contains('hidden')) {
+        close();
+      }
+    };
+    document.addEventListener('mapmarkerselect', onMarkerSelect);
+    facilityDetailCleanups.push(() =>
+      document.removeEventListener('mapmarkerselect', onMarkerSelect),
+    );
+
+    const onCloseClick = () => {
+      document.dispatchEvent(
+        new CustomEvent(FACILITY_MARKER_SELECT_EVENT, { detail: null }),
+      );
+    };
+    closeBtn?.addEventListener('click', onCloseClick);
+    facilityDetailCleanups.push(() =>
+      closeBtn?.removeEventListener('click', onCloseClick),
+    );
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !panel!.classList.contains('hidden')) {
+        document.dispatchEvent(
+          new CustomEvent(FACILITY_MARKER_SELECT_EVENT, { detail: null }),
+        );
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    facilityDetailCleanups.push(() =>
+      document.removeEventListener('keydown', onKeyDown),
+    );
+  }
+
+  onReady(initFacilityDetailPanel);
+</script>

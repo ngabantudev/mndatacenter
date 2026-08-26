@@ -195,6 +195,13 @@ const TABS = [
         document.dispatchEvent(
           new CustomEvent("mapmarkerselect", { detail: null }),
         );
+        // Same slot, same rule: the pollution-facility panel (opened by
+        // tapping a facility pin, not a tab — see FacilityDetailParent.astro)
+        // is the other surface that can occupy this space, so a tab taking
+        // the slot has to close it too.
+        document.dispatchEvent(
+          new CustomEvent("facilitymarkerselect", { detail: null }),
+        );
       }
     }
 
@@ -255,6 +262,20 @@ const TABS = [
     document.addEventListener("mapmarkerselect", onMarkerSelect);
     toolbarCleanups.push(() =>
       document.removeEventListener("mapmarkerselect", onMarkerSelect),
+    );
+
+    // Same rule, for a pollution-facility pin selection — see
+    // FacilityDetailParent.astro. That panel occupies the identical slot.
+    const onFacilityMarkerSelect = (event: Event) => {
+      const detail = (event as CustomEvent<{ facility: unknown } | null>).detail;
+      if (detail?.facility && activeSheet !== null) {
+        activeSheet = null;
+        publish();
+      }
+    };
+    document.addEventListener("facilitymarkerselect", onFacilityMarkerSelect);
+    toolbarCleanups.push(() =>
+      document.removeEventListener("facilitymarkerselect", onFacilityMarkerSelect),
     );
 
     /**
